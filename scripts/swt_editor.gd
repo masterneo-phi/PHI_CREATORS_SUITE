@@ -40,6 +40,14 @@ func setup(project: WorldProject) -> void:
 			_refresh_list())
 	btns.add_child(add_s)
 	btns.add_child(del)
+	var ai_ask := Button.new()
+	ai_ask.text = "AIに頼む"
+	ai_ask.pressed.connect(_show_ai_ask)
+	btns.add_child(ai_ask)
+	var ai_imp := Button.new()
+	ai_imp.text = "AIから取り込む"
+	ai_imp.pressed.connect(_show_ai_import)
+	btns.add_child(ai_imp)
 	left.add_child(btns)
 	_list = ItemList.new()
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -87,6 +95,85 @@ func _summary(i: int, rec: Dictionary) -> String:
 func _on_selected(idx: int) -> void:
 	_current = _indices[idx]
 	_show_detail(_current)
+
+
+# ---------------------------------------------------------------- AI 支援
+
+func _ai_window(title: String) -> Array:
+	var win := Window.new()
+	win.title = title
+	win.transparent = true # Mac で黒く潰れないように
+	win.size = Vector2i(940, 720)
+	var v := VBoxContainer.new()
+	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	win.add_child(v)
+	add_child(win)
+	win.popup_centered()
+	return [win, v]
+
+
+func _show_ai_ask() -> void:
+	var parts := _ai_window("AIに頼む")
+	var v: VBoxContainer = parts[1]
+	var help := Label.new()
+	help.text = "この文を自分の Muse (AI) に貼り、末尾の「作りたい仕掛け」を書き換えて送ってください。\n返ってきた :S 行は「AIから取り込む」で検証してから追加できます。"
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(help)
+	var te := TextEdit.new()
+	te.text = SwtAi.build_context(_project)
+	te.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(te)
+	var row := HBoxContainer.new()
+	v.add_child(row)
+	var copy_btn := Button.new()
+	copy_btn.text = "全部コピー"
+	copy_btn.pressed.connect(func() -> void:
+		DisplayServer.clipboard_set(te.text)
+		copy_btn.text = "コピーしました")
+	row.add_child(copy_btn)
+	var close_btn := Button.new()
+	close_btn.text = "閉じる"
+	var win: Window = parts[0]
+	close_btn.pressed.connect(func() -> void: win.hide())
+	row.add_child(close_btn)
+
+
+func _show_ai_import() -> void:
+	var parts := _ai_window("AIから取り込む")
+	var v: VBoxContainer = parts[1]
+	var win: Window = parts[0]
+	var help := Label.new()
+	help.text = "AI が返した :S 行を貼ってください。書式の往復チェック・条件/動作の定義・座標の範囲を検証し、通った行だけを追加します。"
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(help)
+	var te := TextEdit.new()
+	te.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(te)
+	var result := Label.new()
+	result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(result)
+	var row := HBoxContainer.new()
+	v.add_child(row)
+	var imp := Button.new()
+	imp.text = "検証して取り込む"
+	imp.pressed.connect(func() -> void:
+		var r := SwtAi.validate_lines(te.text, _project.map_size)
+		var n := 0
+		for rec in r["ok"]:
+			_swt.add_record(rec)
+			n += 1
+		if n > 0:
+			_refresh_list()
+		var msg := "%d 件を取り込みました。" % n
+		var errs: Array = r["errors"]
+		if not errs.is_empty():
+			msg += "\n取り込めなかった行:\n" + "\n".join(errs)
+		result.text = msg)
+	row.add_child(imp)
+	var close_btn := Button.new()
+	close_btn.text = "閉じる"
+	close_btn.pressed.connect(func() -> void: win.hide())
+	row.add_child(close_btn)
 
 
 func _clear_detail() -> void:
