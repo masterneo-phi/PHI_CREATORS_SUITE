@@ -38,6 +38,9 @@ var _current_idx := 0
 var _autosave_check: CheckBox
 var _autosave_timer: Timer
 var _about_overlay: Control = null
+var _menu_hooked := false
+var _menu_timer: Timer = null
+var _menu_retry_left := 0
 var _update_http: HTTPRequest = null
 var _update_busy := false
 var _update_manual := false
@@ -50,8 +53,9 @@ var _update_label: Label = null
 func _ready() -> void:
 	add_to_group("creators_main")
 	theme = AppTheme.build()
-	_setup_global_menu()
-	_setup_global_menu.call_deferred()
+	_try_hook_menu()
+	_try_hook_menu.call_deferred()
+	_start_menu_hook_retry()
 	_start_auto_update_check()
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -345,7 +349,7 @@ func _make_overlay(title_text: String) -> Control:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.45)
+	dim.color = Color(0, 0, 0, 0)  # 暗転させない (NeoPHI の窓表示に合わせる)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(dim)
 	var panel := PanelContainer.new()
@@ -409,20 +413,58 @@ func _attach_panel_drag(band: Control, panel: Control) -> void:
 ## macOS のアプリケーションメニューの「About」は Godot 既定では
 ## 何も起きないため、バージョン情報へつなぐ。項目は位置ではなく
 ## 項目名 (About… / …について) で探す (NeoPHI の実績方式)
-func _setup_global_menu() -> void:
+func _setup_global_menu() -> bool:
 	if not OS.has_feature("macos"):
-		return
+		return true
 	if not NativeMenu.has_feature(NativeMenu.FEATURE_GLOBAL_MENU):
-		return
+		return true
 	if not NativeMenu.has_system_menu(NativeMenu.APPLICATION_MENU_ID):
-		return
+		return false
 	var menu := NativeMenu.get_system_menu(NativeMenu.APPLICATION_MENU_ID)
 	for i in NativeMenu.get_item_count(menu):
 		var item_text := NativeMenu.get_item_text(menu, i)
 		if item_text.begins_with("About") or item_text.contains("について"):
 			NativeMenu.set_item_callback(menu, i,
 					Callable(self, "_on_macos_about_item"))
-			return
+			return true
+	return false
+
+
+## メニューが組み上がる前に呼ぶと has_system_menu が false を返し、
+## 接続できないまま終わる (CREATORS は起動が速く、_ready と次フレーム
+## では間に合わなかった)。成功するまでタイマーで再試行し、
+## アプリにフォーカスが戻るたびにも再接続を試みる。
+func _try_hook_menu() -> void:
+	if _menu_hooked:
+		return
+	if _setup_global_menu():
+		_menu_hooked = true
+		if _menu_timer != null:
+			_menu_timer.stop()
+
+
+func _start_menu_hook_retry() -> void:
+	if _menu_hooked or not OS.has_feature("macos"):
+		return
+	_menu_retry_left = 40
+	_menu_timer = Timer.new()
+	_menu_timer.wait_time = 0.5
+	_menu_timer.timeout.connect(_on_menu_retry_tick)
+	add_child(_menu_timer)
+	_menu_timer.start()
+
+
+func _on_menu_retry_tick() -> void:
+	_menu_retry_left -= 1
+	_try_hook_menu()
+	if _menu_hooked or _menu_retry_left <= 0:
+		if _menu_timer != null:
+			_menu_timer.stop()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		_try_hook_menu()
 
 
 func _on_macos_about_item(_tag: Variant) -> void:

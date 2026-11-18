@@ -42,6 +42,8 @@ func _run() -> void:
 	check((ov as Control).visible, "メニュー経由でも表示される")
 	# macOS 以外ではフックが無害なこと
 	main.call("_setup_global_menu")
+	main.call("_try_hook_menu")
+	check(bool(main.get("_menu_hooked")), "menu hook settles off-macOS")
 	check(true, "メニューフックは他 OS で無害")
 	print("checks: %d, failures: %d" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)

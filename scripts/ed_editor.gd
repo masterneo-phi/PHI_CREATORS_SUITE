@@ -245,7 +245,11 @@ func _refresh_subs() -> void:
 	_sub_list.clear()
 	for i in range(int(_block["header"]) + 1, int(_block["end"])):
 		_sub_indices.append(i)
-		_sub_list.add_item(_ed.raw_lines.line_text(i).substr(0, 55))
+		var rec: Dictionary = _ed.records[i]
+		var txt := _ed.raw_lines.line_text(i)
+		if txt.strip_edges() == "" or bool(rec.get("modified", false)):
+			txt = PhiEd.build_line(rec)
+		_sub_list.add_item(txt.substr(0, 55))
 
 
 func _on_sub_selected(idx: int) -> void:

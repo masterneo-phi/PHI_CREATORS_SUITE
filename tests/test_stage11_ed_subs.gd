@@ -95,5 +95,13 @@ func _run() -> void:
 			break
 	await process_frame
 	check(found_i, ":I サブの分解エディタを開ける")
+	# 追加したサブの一覧行が空にならないこと (実機バグ: 行が細く潰れる)
+	editor.call("_add_sub", "T")
+	await process_frame
+	var sub_list = editor.get("_sub_list")
+	var last_txt := ""
+	if sub_list != null and sub_list.item_count > 0:
+		last_txt = sub_list.get_item_text(sub_list.item_count - 1)
+	check(last_txt.begins_with(":T"), "追加サブの一覧行に生成行が出る")
 	print("checks: %d, failures: %d" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
