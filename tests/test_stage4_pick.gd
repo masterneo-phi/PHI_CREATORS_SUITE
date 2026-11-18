@@ -66,7 +66,7 @@ func _run() -> void:
 			"/home/hatch/workspace/phi-creators-godot/tests/fixtures/testworld", tmp])
 	main.open_world(tmp)
 	await process_frame
-	main.call("_on_editor_selected", 2) # エネミー
+	main.call("_on_editor_selected", 5) # エネミー
 	await process_frame
 	var editors: Dictionary = main.get("_editors")
 	var ed_editor: Control = editors["ed"]
@@ -106,7 +106,7 @@ func _run() -> void:
 			"/home/hatch/workspace/phi-creators-godot/tests/fixtures/realworld", rw])
 	main.open_world(rw)
 	await process_frame
-	main.call("_on_editor_selected", 6) # スイッチ
+	main.call("_on_editor_selected", 3) # スイッチ
 	await process_frame
 	var swt_editor: Control = editors["swt"]
 	var proj2: WorldProject = main.get("_project")

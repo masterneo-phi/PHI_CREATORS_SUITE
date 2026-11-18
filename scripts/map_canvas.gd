@@ -79,10 +79,25 @@ func _cell_rect(cx: int, cy: int) -> Rect2:
 			cell_px, cell_px)
 
 
+## 表示範囲がマップの端を越えないよう offset を締める (第6段)。
+func clamp_offset() -> void:
+	if dd == null:
+		return
+	var vis_x := size.x / float(cell_px)
+	var vis_y := size.y / float(cell_px)
+	offset.x = clampf(offset.x, 0.0, maxf(0.0, dd.size_x - vis_x))
+	offset.y = clampf(offset.y, 0.0, maxf(0.0, dd.size_y - vis_y))
+
+
 func _draw() -> void:
 	if dd == null:
 		return
+	clamp_offset()
 	var font := get_theme_default_font()
+	# マップ全体の輪郭 (余白枠の中で範囲が分かるように)
+	var extent := Rect2(Vector2(-offset.x, -offset.y) * cell_px,
+			Vector2(dd.size_x, dd.size_y) * cell_px)
+	draw_rect(extent, Color(0.9, 0.9, 0.95, 0.85), false, 2.5)
 	var x0 := maxi(0, floori(offset.x))
 	var y0 := maxi(0, floori(offset.y))
 	var x1 := mini(dd.size_x - 1, x0 + ceili(size.x / cell_px) + 1)
@@ -229,11 +244,13 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			offset.y = maxf(0, offset.y - 3)
+			offset.y -= 3
+			clamp_offset()
 			offset_changed.emit()
 			queue_redraw()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			offset.y = minf(dd.size_y - 1, offset.y + 3)
+			offset.y += 3
+			clamp_offset()
 			offset_changed.emit()
 			queue_redraw()
 		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
@@ -254,8 +271,7 @@ func _gui_input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		if _panning:
 			offset = _offset_start - (mm.position - _pan_start) / cell_px
-			offset.x = clampf(offset.x, 0, dd.size_x - 1)
-			offset.y = clampf(offset.y, 0, dd.size_y - 1)
+			clamp_offset()
 			offset_changed.emit()
 			queue_redraw()
 			return

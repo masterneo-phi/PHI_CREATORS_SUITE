@@ -17,7 +17,7 @@ const KIND_LABELS := {
 func setup(project: WorldProject) -> void:
 	_ex = project.ex
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(360, 0)
+	left.custom_minimum_size = Vector2(450, 0)
 	add_child(left)
 	if _ex == null:
 		var l := Label.new()

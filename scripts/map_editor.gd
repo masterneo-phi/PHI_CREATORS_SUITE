@@ -69,7 +69,7 @@ func _build_create_ui() -> void:
 func _build_editor_ui() -> void:
 	# 左: 道具とパレット (縦に長くなるのでスクロール可能にする)
 	var left_scroll := ScrollContainer.new()
-	left_scroll.custom_minimum_size = Vector2(250, 0)
+	left_scroll.custom_minimum_size = Vector2(350, 0)
 	add_child(left_scroll)
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -134,6 +134,8 @@ func _build_editor_ui() -> void:
 	left.add_child(swt_check)
 	var pl := Label.new()
 	pl.text = "■ 地形パレット (右クリックで吸い取り)"
+	pl.clip_text = true
+	pl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	left.add_child(pl)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 190)
@@ -146,7 +148,7 @@ func _build_editor_ui() -> void:
 	al.text = "■ エリア"
 	left.add_child(al)
 	_area_list = ItemList.new()
-	_area_list.custom_minimum_size = Vector2(0, 130)
+	_area_list.custom_minimum_size = Vector2(0, 300)
 	_area_list.item_selected.connect(_on_area_selected)
 	left.add_child(_area_list)
 	var add_area := Button.new()
@@ -160,10 +162,20 @@ func _build_editor_ui() -> void:
 	_e_detail = VBoxContainer.new()
 	left.add_child(_e_detail)
 	_refresh_areas()
-	# 中央: キャンバス + スクロールバー
+	# 中央: キャンバス + スクロールバー (周囲に余白枠を付ける)
+	var frame := PanelContainer.new()
+	frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var fs := AppTheme.style(Color(0.10, 0.10, 0.12),
+			Color(0.55, 0.58, 0.65))
+	fs.content_margin_left = 10
+	fs.content_margin_right = 10
+	fs.content_margin_top = 10
+	fs.content_margin_bottom = 10
+	frame.add_theme_stylebox_override("panel", fs)
+	add_child(frame)
 	var mid := VBoxContainer.new()
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(mid)
+	frame.add_child(mid)
 	var row1 := HBoxContainer.new()
 	row1.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mid.add_child(row1)
@@ -198,7 +210,7 @@ func _build_editor_ui() -> void:
 	row2.add_child(corner)
 	# 右: 情報とオブジェクト詳細
 	var right := VBoxContainer.new()
-	right.custom_minimum_size = Vector2(290, 0)
+	right.custom_minimum_size = Vector2(370, 0)
 	add_child(right)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -285,10 +297,20 @@ func _build_palette() -> void:
 		b.text = String(PhiDd.CODE_TO_PAIR.get(code, "  "))
 		b.tooltip_text = String(PhiDd.CODE_TO_NAME.get(code, ""))
 		b.toggle_mode = true
-		var fc: Color = MapCanvas.FALLBACK_COLORS.get(code,
-				Color(0.9, 0.9, 0.9))
-		b.add_theme_color_override("font_color", fc.lightened(0.55))
-		b.add_theme_color_override("font_hover_color", fc.lightened(0.7))
+		# 地形そのものの色をボタンの地にする (第6段: 色が潰れないように)
+		var base: Color = MapCanvas.FALLBACK_COLORS.get(code,
+				Color(0.35, 0.35, 0.35))
+		b.add_theme_stylebox_override("normal",
+				AppTheme.style(base.darkened(0.10)))
+		b.add_theme_stylebox_override("hover",
+				AppTheme.style(base.lightened(0.15)))
+		b.add_theme_stylebox_override("pressed",
+				AppTheme.style(base.lightened(0.30), AppTheme.GOLD))
+		b.add_theme_color_override("font_color", Color.WHITE)
+		b.add_theme_color_override("font_hover_color", Color.WHITE)
+		b.add_theme_color_override("font_pressed_color", Color.WHITE)
+		b.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		b.add_theme_constant_override("outline_size", 6)
 		var c := code
 		b.pressed.connect(func() -> void:
 			_canvas.pen_code = c
@@ -364,6 +386,7 @@ func _show_e(code: int) -> void:
 	for ch in PhiFd.FLAG_NAMES.keys():
 		var c := CheckBox.new()
 		c.text = "%s: %s" % [ch, String(PhiFd.FLAG_NAMES[ch])]
+		c.add_theme_font_size_override("font_size", 23)
 		c.set_meta("flag_char", ch)
 		c.button_pressed = flags.contains(ch)
 		c.toggled.connect(func(_on: bool) -> void:
@@ -393,7 +416,7 @@ func _e_field(label: String, value: String, on_change: Callable) -> void:
 	var h := HBoxContainer.new()
 	var l := Label.new()
 	l.text = label
-	l.custom_minimum_size = Vector2(110, 0)
+	l.custom_minimum_size = Vector2(140, 0)
 	h.add_child(l)
 	var e := LineEdit.new()
 	e.text = value
@@ -412,6 +435,7 @@ func _on_hover(x: int, y: int) -> void:
 func _update_scrollbars() -> void:
 	if _canvas == null or _project == null or _project.dd == null:
 		return
+	_canvas.clamp_offset()
 	_syncing_bars = true
 	var cols := int(_canvas.size.x) / maxi(1, _canvas.cell_px)
 	var rows := int(_canvas.size.y) / maxi(1, _canvas.cell_px)

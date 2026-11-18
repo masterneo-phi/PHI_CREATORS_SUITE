@@ -15,7 +15,7 @@ const DIR_LABELS: Array[String] = [
 func setup(project: WorldProject) -> void:
 	_od = project.od
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(300, 0)
+	left.custom_minimum_size = Vector2(380, 0)
 	add_child(left)
 	if _od == null:
 		var l := Label.new()

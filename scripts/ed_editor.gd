@@ -43,7 +43,7 @@ func setup(project: WorldProject) -> void:
 	_project = project
 	_ed = project.ed
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(220, 0)
+	left.custom_minimum_size = Vector2(280, 0)
 	add_child(left)
 	if _ed == null:
 		var l := Label.new()

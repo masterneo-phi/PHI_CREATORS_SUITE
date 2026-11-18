@@ -29,7 +29,7 @@ func setup(project: WorldProject) -> void:
 func _section(title: String) -> void:
 	var l := Label.new()
 	l.text = "■ " + title
-	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_font_size_override("font_size", 30)
 	l.add_theme_color_override("font_color", AppTheme.GOLD)
 	_box.add_child(l)
 
@@ -38,7 +38,7 @@ func _row(label: String, control: Control, help: String) -> void:
 	var h := HBoxContainer.new()
 	var l := Label.new()
 	l.text = label
-	l.custom_minimum_size = Vector2(230, 0)
+	l.custom_minimum_size = Vector2(310, 0)
 	h.add_child(l)
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(control)
@@ -46,7 +46,7 @@ func _row(label: String, control: Control, help: String) -> void:
 		var hl := Label.new()
 		hl.text = help
 		hl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hl.custom_minimum_size = Vector2(300, 0)
+		hl.custom_minimum_size = Vector2(370, 0)
 		hl.modulate = Color(0.75, 0.75, 0.75)
 		h.add_child(hl)
 	_box.add_child(h)

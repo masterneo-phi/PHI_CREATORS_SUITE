@@ -15,11 +15,11 @@ const MapEditor := preload("res://scripts/map_editor.gd")
 const EDITORS: Array[Dictionary] = [
 	{"name": "世界設定 (phi.td)", "scene": "td"},
 	{"name": "アナウンス (phi.bb / phi.inf)", "scene": "announce"},
-	{"name": "エネミー (phi.ed)", "scene": "ed"},
-	{"name": "オブジェクト (phi.od)", "scene": "od"},
-	{"name": "クリエイト (phi.crt)", "scene": "crt"},
 	{"name": "マップ (phi.dd / phi.fd)", "scene": "map"},
 	{"name": "スイッチ (phi.swt)", "scene": "swt"},
+	{"name": "オブジェクト (phi.od)", "scene": "od"},
+	{"name": "エネミー (phi.ed)", "scene": "ed"},
+	{"name": "クリエイト (phi.crt)", "scene": "crt"},
 	{"name": "ゲート制限 (phi.ex)", "scene": "ex"},
 	{"name": "マスター権限 (phi.ad)", "scene": "ad"},
 ]
@@ -73,6 +73,9 @@ func _ready() -> void:
 	bar.add_child(about_btn)
 	_path_label = Label.new()
 	_path_label.text = "(未選択)"
+	_path_label.clip_text = true
+	_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_path_label.add_theme_color_override("font_color", Color.WHITE)
 	bar.add_child(_path_label)
 	_status_label = Label.new()
@@ -90,7 +93,7 @@ func _ready() -> void:
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(split)
 	_editor_list = ItemList.new()
-	_editor_list.custom_minimum_size = Vector2(260, 0)
+	_editor_list.custom_minimum_size = Vector2(330, 0)
 	for e in EDITORS:
 		_editor_list.add_item(String(e["name"]))
 	_editor_list.item_selected.connect(_on_editor_selected)

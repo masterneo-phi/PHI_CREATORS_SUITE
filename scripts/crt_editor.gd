@@ -25,7 +25,7 @@ const KIND_HELP := {
 func setup(project: WorldProject) -> void:
 	_crt = project.crt
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(360, 0)
+	left.custom_minimum_size = Vector2(450, 0)
 	add_child(left)
 	if _crt == null:
 		var l := Label.new()

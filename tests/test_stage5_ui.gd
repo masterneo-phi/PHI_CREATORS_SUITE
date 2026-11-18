@@ -30,7 +30,7 @@ func _run() -> void:
 	var scenes: Array = []
 	for e in MainScript.EDITORS:
 		scenes.append(String(e["scene"]))
-	_check(scenes == ["td", "announce", "ed", "od", "crt", "map", "swt",
+	_check(scenes == ["td", "announce", "map", "swt", "od", "ed", "crt",
 			"ex", "ad"], "editor order: " + str(scenes))
 	# --- クリエイトのブロック化 (モデル) ---
 	var crt := PhiCrt.load_file(
@@ -61,14 +61,14 @@ func _run() -> void:
 	var main = main_scene.instantiate()
 	root.add_child(main)
 	await process_frame
-	_check(main.theme != null and main.theme.default_font_size >= 18,
+	_check(main.theme != null and main.theme.default_font_size >= 27,
 			"theme font size")
-	_check(int(main.call("_editor_index", "map")) == 5, "map index")
-	_check(int(main.call("_editor_index", "swt")) == 6, "swt index")
+	_check(int(main.call("_editor_index", "map")) == 2, "map index")
+	_check(int(main.call("_editor_index", "swt")) == 3, "swt index")
 	main.open_world(tmp)
 	await process_frame
 	# クリエイトエディタ: 一覧 = レシピ数
-	main.call("_on_editor_selected", 4)
+	main.call("_on_editor_selected", 6)
 	await process_frame
 	var crt_ed = main.get("_editors")["crt"]
 	_check(crt_ed._list.item_count == expected_blocks,
@@ -78,7 +78,7 @@ func _run() -> void:
 	await process_frame
 	_check(crt_ed._detail.get_child_count() > 3, "crt detail shows block")
 	# マップ: エリア選択で強調表示
-	main.call("_on_editor_selected", 5)
+	main.call("_on_editor_selected", 2)
 	await process_frame
 	var map_ed = main.get("_editors")["map"]
 	_check(map_ed._canvas.cell_px >= 24, "map default zoom 24")

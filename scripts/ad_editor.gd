@@ -15,7 +15,7 @@ const AUTH_ORDER: Array[String] = [
 func setup(project: WorldProject) -> void:
 	_ad = project.ad
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(260, 0)
+	left.custom_minimum_size = Vector2(330, 0)
 	add_child(left)
 	if _ad == null:
 		var l := Label.new()
