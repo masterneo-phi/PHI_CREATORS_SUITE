@@ -23,7 +23,8 @@ func setup(project: WorldProject) -> void:
 		l.text = "phi.swt は無い world です"
 		left.add_child(l)
 		return
-	var btns := HBoxContainer.new()
+	var btns := GridContainer.new()
+	btns.columns = 3
 	var add_s := Button.new()
 	add_s.text = "新規 :S"
 	add_s.pressed.connect(func() -> void:
@@ -174,6 +175,114 @@ func _show_ai_import() -> void:
 	close_btn.text = "閉じる"
 	close_btn.pressed.connect(func() -> void: win.hide())
 	row.add_child(close_btn)
+
+
+# ------------------------------------------------------------ 作例ライブラリ
+
+var _lib_entries: Array = []
+var _lib_list: ItemList
+var _lib_preview: Label
+var _lib_status: Label
+
+
+func _show_library() -> void:
+	var parts := _ai_window("スイッチ作例ライブラリ")
+	var v: VBoxContainer = parts[1]
+	var win: Window = parts[0]
+	var help := Label.new()
+	help.text = "座標と文章を伏せた作例集です。選んで「この作例を追加」すると下書きとして入るので、座標と文章を直して使ってください。\n「この世界から作例を生成」は、今開いている世界のスイッチを同じ規則で伏せて自分のライブラリに足します。"
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(help)
+	_lib_status = Label.new()
+	v.add_child(_lib_status)
+	_lib_list = ItemList.new()
+	_lib_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_lib_list.item_selected.connect(func(idx: int) -> void:
+		_lib_preview.text = String(_lib_entries[idx]["line"]))
+	v.add_child(_lib_list)
+	_lib_preview = Label.new()
+	_lib_preview.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(_lib_preview)
+	var row := HBoxContainer.new()
+	v.add_child(row)
+	var add_btn := Button.new()
+	add_btn.text = "この作例を追加"
+	add_btn.pressed.connect(func() -> void:
+		var sel := _lib_list.get_selected_items()
+		if sel.is_empty():
+			return
+		var line := String(_lib_entries[sel[0]]["line"])
+		if line.begins_with(":S"):
+			var r := SwtAi.validate_lines(line, _project.map_size)
+			if (r["ok"] as Array).is_empty():
+				_lib_status.text = "この作例は現在の世界には追加できません"
+				return
+			_swt.add_record(r["ok"][0])
+		else:
+			var p2 := PhiSwt.parse(PhiRawLines.from_bytes(Cp932.encode(line)))
+			if p2.records.is_empty():
+				return
+			_swt.add_record(p2.records[0])
+		_refresh_list()
+		_lib_status.text = "作例を追加しました (座標と文章を直してください)")
+	row.add_child(add_btn)
+	var gen_btn := Button.new()
+	gen_btn.text = "この世界から作例を生成"
+	gen_btn.pressed.connect(func() -> void:
+		var made := SwtLibrary.build_entries(_swt)
+		var added := SwtLibrary.append_user_entries(made)
+		_refresh_library()
+		_lib_status.text = "この世界から %d 件の作例を新しく足しました" % added)
+	row.add_child(gen_btn)
+	var exp_btn := Button.new()
+	exp_btn.text = "書き出し"
+	exp_btn.pressed.connect(func() -> void:
+		var fd := FileDialog.new()
+		fd.transparent = true # Mac で黒く潰れないように
+		fd.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		fd.access = FileDialog.ACCESS_FILESYSTEM
+		fd.current_file = "switch_library.txt"
+		fd.file_selected.connect(func(path: String) -> void:
+			var f := FileAccess.open(path, FileAccess.WRITE)
+			if f != null:
+				f.store_string(SwtLibrary.entries_to_text(_lib_entries))
+			fd.queue_free())
+		add_child(fd)
+		fd.popup_centered_ratio(0.7))
+	row.add_child(exp_btn)
+	var imp_btn := Button.new()
+	imp_btn.text = "読み込み"
+	imp_btn.pressed.connect(func() -> void:
+		var fd := FileDialog.new()
+		fd.transparent = true
+		fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		fd.access = FileDialog.ACCESS_FILESYSTEM
+		fd.file_selected.connect(func(path: String) -> void:
+			var f := FileAccess.open(path, FileAccess.READ)
+			if f != null:
+				var es := SwtLibrary.parse_library_text(f.get_as_text())
+				var added := SwtLibrary.append_user_entries(es)
+				_refresh_library()
+				_lib_status.text = "%d 件の作例を読み込みました" % added
+			fd.queue_free())
+		add_child(fd)
+		fd.popup_centered_ratio(0.7))
+	row.add_child(imp_btn)
+	var close_btn := Button.new()
+	close_btn.text = "閉じる"
+	close_btn.pressed.connect(func() -> void: win.hide())
+	row.add_child(close_btn)
+	_refresh_library()
+
+
+func _refresh_library() -> void:
+	_lib_entries = SwtLibrary.load_all()
+	_lib_list.clear()
+	for e in _lib_entries:
+		var line := String(e["line"])
+		_lib_list.add_item("%s ｜ %s" % [String(e["label"]),
+				line.substr(0, 72)])
+	_lib_status.text = "作例 %d 件" % _lib_entries.size()
 
 
 func _clear_detail() -> void:
