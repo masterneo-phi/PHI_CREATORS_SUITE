@@ -37,12 +37,22 @@ var _pick_switching := false
 var _current_idx := 0
 var _autosave_check: CheckBox
 var _autosave_timer: Timer
+var _about_window: Window = null
+var _update_http: HTTPRequest = null
+var _update_busy := false
+var _update_manual := false
+var _update_retried := false
+var _update_info: Dictionary = {}
+var _update_window: Window = null
+var _update_label: Label = null
 
 
 func _ready() -> void:
 	add_to_group("creators_main")
 	theme = AppTheme.build()
 	_setup_global_menu()
+	_setup_global_menu.call_deferred()
+	_start_auto_update_check()
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
@@ -72,6 +82,10 @@ func _ready() -> void:
 	about_btn.text = "バージョン情報"
 	about_btn.pressed.connect(_show_about)
 	bar.add_child(about_btn)
+	var update_btn := Button.new()
+	update_btn.text = "更新を確認"
+	update_btn.pressed.connect(func() -> void: _check_update(true))
+	bar.add_child(update_btn)
 	_path_label = Label.new()
 	_path_label.text = "(未選択)"
 	_path_label.clip_text = true
@@ -311,23 +325,255 @@ func _on_autosave_tick() -> void:
 
 
 func _show_about() -> void:
-	var dlg := AcceptDialog.new()
-	dlg.transparent = true # Mac で黒く潰れないように (NeoPHI の教訓)
-	dlg.title = "バージョン情報"
-	dlg.dialog_text = CreatorsVersion.about_text()
-	add_child(dlg)
-	dlg.popup_centered(Vector2i(360, 200))
+	# AcceptDialog は Mac 実機で開かない事象が NeoPHI であったため、
+	# 実績のある通常の Window で出す (2026-11-18 の報告を受けて変更)。
+	if _about_window == null:
+		var win := Window.new()
+		win.visible = false
+		win.transparent = true
+		win.title = ""
+		win.transient = true
+		win.theme = theme
+		win.close_requested.connect(func() -> void: win.hide())
+		var frame := PanelContainer.new()
+		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		frame.add_theme_stylebox_override("panel",
+				AppTheme.style(Color(0.16, 0.17, 0.20),
+						Color(0.55, 0.58, 0.65)))
+		win.add_child(frame)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 10)
+		frame.add_child(box)
+		var head := HBoxContainer.new()
+		var tl := Label.new()
+		tl.text = "バージョン情報"
+		tl.add_theme_color_override("font_color", AppTheme.GOLD)
+		head.add_child(tl)
+		var sp := Control.new()
+		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(sp)
+		var close_btn := Button.new()
+		close_btn.text = "×"
+		close_btn.focus_mode = Control.FOCUS_NONE
+		close_btn.pressed.connect(func() -> void: win.hide())
+		head.add_child(close_btn)
+		box.add_child(head)
+		_attach_window_drag(head, win)
+		var label := Label.new()
+		label.text = CreatorsVersion.about_text()
+		box.add_child(label)
+		add_child(win)
+		_about_window = win
+	var frame_min := (_about_window.get_child(0) as Control) \
+			.get_combined_minimum_size()
+	var need := Vector2i(frame_min) + Vector2i(36, 28)
+	if need.x < 200 or need.y < 120:
+		need = Vector2i(440, 260)
+	var root_size := get_window().size
+	need.x = mini(need.x, maxi(root_size.x - 16, 320))
+	need.y = mini(need.y, maxi(root_size.y - 16, 240))
+	_about_window.min_size = need
+	_about_window.size = need
+	_about_window.position = Vector2i(
+			maxi(0, (root_size.x - need.x) / 2),
+			maxi(0, (root_size.y - need.y) / 2))
+	_about_window.show()
+
+
+## 題名行を掴んで窓を動かせるようにする (About 窓用)
+func _attach_window_drag(band: Control, win: Window) -> void:
+	var state := {"drag": false, "off": Vector2i.ZERO}
+	band.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton:
+			var mb := event as InputEventMouseButton
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				state["drag"] = mb.pressed
+				if mb.pressed:
+					state["off"] = DisplayServer.mouse_get_position() \
+							- win.position
+		elif event is InputEventMouseMotion and bool(state["drag"]):
+			win.position = DisplayServer.mouse_get_position() \
+					- Vector2i(state["off"]))
 
 
 ## macOS のアプリケーションメニューの「About」は Godot 既定では
-## 何も起きないため、バージョン情報ダイアログへつなぐ
+## 何も起きないため、バージョン情報へつなぐ。項目は位置ではなく
+## 項目名 (About… / …について) で探す (NeoPHI の実績方式)
 func _setup_global_menu() -> void:
-	if OS.get_name() != "macOS":
+	if not OS.has_feature("macos"):
 		return
-	if not DisplayServer.has_feature(DisplayServer.FEATURE_GLOBAL_MENU):
+	if not NativeMenu.has_feature(NativeMenu.FEATURE_GLOBAL_MENU):
+		return
+	if not NativeMenu.has_system_menu(NativeMenu.APPLICATION_MENU_ID):
 		return
 	var menu := NativeMenu.get_system_menu(NativeMenu.APPLICATION_MENU_ID)
-	if not menu.is_valid():
+	for i in NativeMenu.get_item_count(menu):
+		var item_text := NativeMenu.get_item_text(menu, i)
+		if item_text.begins_with("About") or item_text.contains("について"):
+			NativeMenu.set_item_callback(menu, i,
+					Callable(self, "_on_macos_about_item"))
+			return
+
+
+func _on_macos_about_item(_tag: Variant) -> void:
+	_show_about()
+
+
+# --- 更新チェック (NeoPHI 第40/102段の移植) --------------------------
+
+func _start_auto_update_check() -> void:
+	## 起動時の自動チェック。配布版 (エディタでない実行) でのみ行う。
+	if OS.has_feature("editor"):
 		return
-	if NativeMenu.get_item_count(menu) > 0:
-		NativeMenu.set_item_callback(menu, 0, Callable(self, "_show_about"))
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = 3.0
+	timer.timeout.connect(func() -> void: _check_update(false))
+	add_child(timer)
+	timer.start()
+
+
+func _check_update(manual: bool) -> void:
+	## GitHub の最新リリースを確認する。新しいものがあれば窓を出す。
+	## 手動の時は最新だった/失敗したこともステータスで知らせる。
+	if _update_busy:
+		return
+	if _update_http == null:
+		_update_http = HTTPRequest.new()
+		_update_http.timeout = 15.0
+		_update_http.request_completed.connect(_on_update_response)
+		add_child(_update_http)
+	_update_busy = true
+	_update_manual = manual
+	var headers := PackedStringArray([
+		"Accept: application/vnd.github+json",
+		"User-Agent: PHICreatorsSuite/" + CreatorsVersion.VERSION,
+	])
+	var err := _update_http.request(CreatorsUpdate.API_URL, headers)
+	if err != OK:
+		_update_busy = false
+		if manual:
+			_status_label.text = "更新を確認できませんでした"
+		else:
+			_schedule_update_retry()
+
+
+func _schedule_update_retry() -> void:
+	## 自動チェック失敗時に 30 秒後にもう一度だけ確認する。
+	if _update_retried:
+		return
+	_update_retried = true
+	var timer := Timer.new()
+	timer.one_shot = true
+	timer.wait_time = 30.0
+	timer.timeout.connect(func() -> void: _check_update(false))
+	add_child(timer)
+	timer.start()
+
+
+func _on_update_response(result: int, response_code: int,
+		_headers: PackedStringArray, body: PackedByteArray) -> void:
+	_update_busy = false
+	var manual := _update_manual
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		if manual:
+			_status_label.text = "更新を確認できませんでした"
+		else:
+			_schedule_update_retry()
+		return
+	var info := CreatorsUpdate.parse_latest(body.get_string_from_utf8())
+	if info.is_empty():
+		if manual:
+			_status_label.text = "更新を確認できませんでした"
+		else:
+			_schedule_update_retry()
+		return
+	_update_retried = false
+	if CreatorsUpdate.is_newer(str(info["tag"]), CreatorsVersion.VERSION):
+		_update_info = info
+		_show_update_dialog()
+	elif manual:
+		_status_label.text = "PHI CREATORS SUITE " \
+				+ CreatorsVersion.VERSION + " は最新です"
+
+
+func _show_update_dialog() -> void:
+	## 更新のお知らせ窓。About と同じ通常 Window 方式 (Mac 対策)。
+	if _update_window == null:
+		var win := Window.new()
+		win.visible = false
+		win.transparent = true
+		win.title = ""
+		win.transient = true
+		win.theme = theme
+		win.close_requested.connect(func() -> void: win.hide())
+		var frame := PanelContainer.new()
+		frame.add_theme_stylebox_override("panel", AppTheme.style(
+				Color(0.16, 0.17, 0.20), Color(0.55, 0.58, 0.65)))
+		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		win.add_child(frame)
+		var box := VBoxContainer.new()
+		box.add_theme_constant_override("separation", 10)
+		frame.add_child(box)
+		var head := HBoxContainer.new()
+		head.add_theme_constant_override("separation", 6)
+		box.add_child(head)
+		var title := Label.new()
+		title.text = "更新のお知らせ"
+		title.add_theme_color_override("font_color",
+				Color(0.98, 0.80, 0.35))
+		head.add_child(title)
+		var spacer := Control.new()
+		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		head.add_child(spacer)
+		var close_btn := Button.new()
+		close_btn.text = "×"
+		close_btn.focus_mode = Control.FOCUS_NONE
+		close_btn.pressed.connect(func() -> void: win.hide())
+		head.add_child(close_btn)
+		_update_label = Label.new()
+		_update_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_update_label.custom_minimum_size = Vector2(400, 0)
+		box.add_child(_update_label)
+		var buttons := HBoxContainer.new()
+		buttons.add_theme_constant_override("separation", 8)
+		buttons.alignment = BoxContainer.ALIGNMENT_END
+		box.add_child(buttons)
+		var open_btn := Button.new()
+		open_btn.text = "GitHub のリリースページを開く"
+		open_btn.focus_mode = Control.FOCUS_NONE
+		open_btn.pressed.connect(_on_update_open_page)
+		buttons.add_child(open_btn)
+		var close2 := Button.new()
+		close2.text = "閉じる"
+		close2.focus_mode = Control.FOCUS_NONE
+		close2.pressed.connect(func() -> void: win.hide())
+		buttons.add_child(close2)
+		_attach_window_drag(head, win)
+		add_child(win)
+		_update_window = win
+	var tag := str(_update_info.get("tag", ""))
+	var rel_name := str(_update_info.get("name", ""))
+	var shown := tag
+	if not rel_name.is_empty() and rel_name != tag:
+		shown = tag + " (" + rel_name + ")"
+	_update_label.text = "新しいバージョン " + shown \
+			+ " が公開されています。\n現在のバージョンは " \
+			+ CreatorsVersion.VERSION \
+			+ " です。\nGitHub のリリースページから新しい " \
+			+ "PHI CREATORS SUITE を入手してください。"
+	var frame2 := _update_window.get_child(0) as Control
+	var need := Vector2i(frame2.get_combined_minimum_size()) \
+			+ Vector2i(36, 28)
+	var root_size := get_window().size
+	need.x = mini(need.x, maxi(root_size.x - 16, 340))
+	need.y = mini(need.y, maxi(root_size.y - 16, 240))
+	_update_window.size = need
+	_update_window.position = Vector2i(
+			(root_size - need) / 2) + get_window().position
+	_update_window.show()
+
+
+func _on_update_open_page() -> void:
+	OS.shell_open(CreatorsUpdate.page_url(_update_info))
+	_update_window.hide()

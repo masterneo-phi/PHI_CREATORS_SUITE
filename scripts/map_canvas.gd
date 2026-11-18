@@ -9,6 +9,7 @@ signal painted
 signal coord_picked(x: int, y: int)
 signal pick_cancelled
 signal offset_changed
+signal history_changed
 
 var dd: PhiDd
 var fd: PhiFd
@@ -36,6 +37,12 @@ var offset := Vector2.ZERO ## 左上に表示するマス (小数可)
 var selected_object := -1
 
 var _hover := Vector2i(-1, -1)
+## Undo/Redo (第14段): 1ストローク = 押してから離すまでの変更を
+## キー (d:x:y / f:x:y / t:x:y / o:idx) ごとの旧値→新値で記録する
+var _undo_stack: Array[Dictionary] = []
+var _redo_stack: Array[Dictionary] = []
+var _stroke: Dictionary = {}
+var _stroke_active := false
 var _painting := false
 var _panning := false
 var _pan_start := Vector2.ZERO
@@ -65,6 +72,7 @@ const FALLBACK_COLORS := {
 
 
 func _ready() -> void:
+	clip_contents = true # 拡大時に枠外へ描かない (第14段)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST # 拡大時もドットを保つ
@@ -263,11 +271,13 @@ func _gui_input(event: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
 				grab_focus()
+				_begin_stroke()
 				_apply(cell_at_pos(mb.position))
 				_painting = mode in ["terrain", "area", "surface"]
 			else:
 				_painting = false
 				_drag_obj = -1
+				_end_stroke()
 	elif event is InputEventMouseMotion:
 		var mm := event as InputEventMouseMotion
 		if _panning:
@@ -305,11 +315,13 @@ func _apply(c: Vector2i) -> void:
 		return
 	match mode:
 		"terrain":
+			_record_cell(c)
 			dd.set_cell(c.x, c.y, pen_code, pen_roof)
 		"fill":
 			_fill(c, dd.code_at(c.x, c.y))
 		"area":
 			if fd != null:
+				_record_area(c)
 				fd.set_cell(c.x, c.y, pen_area)
 		"surface":
 			_paint_surface(c)
@@ -317,6 +329,9 @@ func _apply(c: Vector2i) -> void:
 			var idx := _object_at(c)
 			selected_object = idx
 			_drag_obj = idx
+			if idx >= 0 and od != null:
+				var f: Dictionary = od.records[idx]["fields"]
+				_record("o:%d" % idx, [int(f["x"]), int(f["y"])])
 			object_picked.emit(idx)
 	painted.emit()
 	queue_redraw()
@@ -335,12 +350,14 @@ func _fill(c: Vector2i, from_code: int) -> void:
 		seen[p] = true
 		if dd.code_at(p.x, p.y) != from_code:
 			continue
+		_record_cell(p)
 		dd.set_cell(p.x, p.y, pen_code, pen_roof)
 		stack.append_array([p + Vector2i(1, 0), p + Vector2i(-1, 0),
 				p + Vector2i(0, 1), p + Vector2i(0, -1)])
 
 
 func _paint_surface(c: Vector2i) -> void:
+	_record("t:%d:%d" % [c.x, c.y], _surface_pair_at(c))
 	var pair := String(PhiDd.CODE_TO_PAIR.get(pen_code, "  "))
 	for t in dd.t_records():
 		if int(t["x"]) == c.x and int(t["y"]) == c.y:
@@ -371,4 +388,133 @@ func _move_drag_obj(c: Vector2i) -> void:
 	rec["fields"]["y"] = c.y
 	od.touch(rec)
 	object_picked.emit(_drag_obj)
+	queue_redraw()
+
+
+# --- Undo/Redo (第14段) ---------------------------------------------
+
+func _record_cell(c: Vector2i) -> void:
+	_record("d:%d:%d" % [c.x, c.y], [dd.code_at(c.x, c.y),
+			dd.roof_at(c.x, c.y)])
+
+
+func _record_area(c: Vector2i) -> void:
+	if fd != null:
+		_record("f:%d:%d" % [c.x, c.y], fd.code_at(c.x, c.y))
+
+
+func _surface_pair_at(c: Vector2i) -> String:
+	for t in dd.t_records():
+		if int(t["x"]) == c.x and int(t["y"]) == c.y:
+			return String(t["pair"])
+	return ""
+
+
+func _begin_stroke() -> void:
+	_stroke = {}
+	_stroke_active = true
+
+
+func _record(key: String, old_value: Variant) -> void:
+	if not _stroke_active or _stroke.has(key):
+		return
+	_stroke[key] = {"old": old_value}
+
+
+func _end_stroke() -> void:
+	_stroke_active = false
+	if _stroke.is_empty():
+		return
+	var entry := {}
+	for key in _stroke.keys():
+		var cur: Variant = _read_key(key)
+		var old: Variant = _stroke[key]["old"]
+		if old != cur:
+			entry[key] = {"old": old, "new": cur}
+	_stroke = {}
+	if entry.is_empty():
+		return
+	_undo_stack.append(entry)
+	if _undo_stack.size() > 100:
+		_undo_stack.pop_front()
+	_redo_stack.clear()
+	history_changed.emit()
+
+
+func _read_key(key: String) -> Variant:
+	var p := key.split(":")
+	match p[0]:
+		"d":
+			return [dd.code_at(int(p[1]), int(p[2])),
+					dd.roof_at(int(p[1]), int(p[2]))]
+		"f":
+			return fd.code_at(int(p[1]), int(p[2])) if fd != null else 0
+		"t":
+			return _surface_pair_at(Vector2i(int(p[1]), int(p[2])))
+		"o":
+			var f: Dictionary = od.records[int(p[1])]["fields"]
+			return [int(f["x"]), int(f["y"])]
+	return null
+
+
+func _apply_key(key: String, value: Variant) -> void:
+	var p := key.split(":")
+	match p[0]:
+		"d":
+			var v: Array = value
+			dd.set_cell(int(p[1]), int(p[2]), int(v[0]), bool(v[1]))
+		"f":
+			if fd != null:
+				fd.set_cell(int(p[1]), int(p[2]), int(value))
+		"t":
+			var c := Vector2i(int(p[1]), int(p[2]))
+			var line := -1
+			for t in dd.t_records():
+				if int(t["x"]) == c.x and int(t["y"]) == c.y:
+					line = int(t["line"])
+					break
+			if String(value) == "":
+				if line >= 0:
+					dd.remove_t_record(line)
+			elif line >= 0:
+				dd.set_t_record(line, c.x, c.y, String(value))
+			else:
+				dd.add_t_record(c.x, c.y, String(value))
+		"o":
+			var rec := od.records[int(p[1])]
+			var v2: Array = value
+			rec["fields"]["x"] = int(v2[0])
+			rec["fields"]["y"] = int(v2[1])
+			od.touch(rec)
+
+
+func can_undo() -> bool:
+	return not _undo_stack.is_empty()
+
+
+func can_redo() -> bool:
+	return not _redo_stack.is_empty()
+
+
+func undo() -> void:
+	if _undo_stack.is_empty():
+		return
+	var entry: Dictionary = _undo_stack.pop_back()
+	for key in entry.keys():
+		_apply_key(key, entry[key]["old"])
+	_redo_stack.append(entry)
+	history_changed.emit()
+	painted.emit()
+	queue_redraw()
+
+
+func redo() -> void:
+	if _redo_stack.is_empty():
+		return
+	var entry: Dictionary = _redo_stack.pop_back()
+	for key in entry.keys():
+		_apply_key(key, entry[key]["new"])
+	_undo_stack.append(entry)
+	history_changed.emit()
+	painted.emit()
 	queue_redraw()

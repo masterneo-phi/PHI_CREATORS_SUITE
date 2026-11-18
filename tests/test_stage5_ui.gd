@@ -98,14 +98,16 @@ func _run() -> void:
 	var td2 := PhiTd.load_file(tmp.path_join("phi.td"))
 	_check(String(td2.find_record("N")["fields"]["name"]) == "Auto Save Test",
 			"autosave wrote phi.td")
-	# About ダイアログ (Mac で黒く潰れないよう transparent が必須)
+	# About 窓 (第13段: Mac で出ない AcceptDialog をやめ通常 Window に。
+	# transparent + 非 AcceptDialog であること)
 	main.call("_show_about")
 	await process_frame
-	var about_ok := false
-	for c in main.get_children():
-		if c is AcceptDialog:
-			about_ok = (c as Window).transparent
-			(c as AcceptDialog).hide()
-	_check(about_ok, "about dialog transparent")
+	var about_win = main.get("_about_window")
+	_check(about_win is Window and not (about_win is AcceptDialog)
+			and (about_win as Window).transparent
+			and (about_win as Window).visible,
+			"about is a transparent plain window")
+	if about_win != null:
+		(about_win as Window).hide()
 	print("stage5 checks: ", _checks, " failures: ", _failures)
 	quit(1 if _failures > 0 else 0)

@@ -24,6 +24,8 @@ var _chip_dir := ""
 var _tool_buttons := {}
 var _zoom_ob: OptionButton
 var _zoom2x_check: CheckBox
+var _undo_btn: Button
+var _redo_btn: Button
 var _zoom_base := 24
 var _zoom_2x := false
 
@@ -119,6 +121,18 @@ func _build_editor_ui() -> void:
 		_save_zoom_cfg())
 	left.add_child(_zoom2x_check)
 	_load_zoom_cfg()
+	var hist := HBoxContainer.new()
+	_undo_btn = Button.new()
+	_undo_btn.text = "元に戻す"
+	_undo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_undo_btn.pressed.connect(func() -> void: _canvas.undo())
+	hist.add_child(_undo_btn)
+	_redo_btn = Button.new()
+	_redo_btn.text = "やり直す"
+	_redo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_redo_btn.pressed.connect(func() -> void: _canvas.redo())
+	hist.add_child(_redo_btn)
+	left.add_child(hist)
 	var area_check := CheckBox.new()
 	area_check.text = "エリアを表示"
 	area_check.toggled.connect(func(on: bool) -> void:
@@ -210,6 +224,8 @@ func _build_editor_ui() -> void:
 	_canvas.pick_cancelled.connect(_on_pick_cancelled)
 	_canvas.offset_changed.connect(_sync_scrollbars)
 	_canvas.resized.connect(_update_scrollbars)
+	_canvas.history_changed.connect(_sync_history_buttons)
+	_sync_history_buttons()
 	row1.add_child(_canvas)
 	_vsb = VScrollBar.new()
 	_vsb.custom_minimum_size = Vector2(16, 0)
@@ -449,6 +465,15 @@ func _on_hover(x: int, y: int) -> void:
 
 
 ## --- スクロールバー ---
+
+func _sync_history_buttons() -> void:
+	if _canvas == null:
+		return
+	if _undo_btn != null:
+		_undo_btn.disabled = not _canvas.can_undo()
+	if _redo_btn != null:
+		_redo_btn.disabled = not _canvas.can_redo()
+
 
 func _apply_zoom() -> void:
 	if _canvas == null:

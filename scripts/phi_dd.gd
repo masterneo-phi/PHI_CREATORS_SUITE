@@ -176,7 +176,7 @@ func t_records() -> Array[Dictionary]:
 		return out
 	for i in tail.line_count():
 		var line := tail.line_text(i)
-		if line.begins_with(":T ") and line.length() >= 14:
+		if line.begins_with(":T ") and line.length() >= 13:
 			out.append({"line": i, "x": line.substr(3, 3).to_int(),
 					"y": line.substr(7, 3).to_int(),
 					"pair": line.substr(11, 2)})
