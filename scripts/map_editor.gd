@@ -551,6 +551,7 @@ func _load_sheet() -> void:
 
 func _on_chip_dir_pressed() -> void:
 	var dlg := FileDialog.new()
+	dlg.transparent = true # Mac で黒く潰れないように (NeoPHI の教訓)
 	dlg.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	dlg.access = FileDialog.ACCESS_FILESYSTEM
 	dlg.dir_selected.connect(func(d: String) -> void:

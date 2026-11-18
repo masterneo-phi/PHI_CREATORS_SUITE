@@ -122,6 +122,7 @@ func _remember_world(dir: String) -> void:
 
 func _on_open_pressed() -> void:
 	var dlg := FileDialog.new()
+	dlg.transparent = true # Mac で黒く潰れないように (NeoPHI の教訓)
 	dlg.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	dlg.access = FileDialog.ACCESS_FILESYSTEM
 	dlg.title = "既存の world フォルダを選択 (phi.td のある場所)"
@@ -135,6 +136,7 @@ func _on_open_pressed() -> void:
 
 func _on_new_pressed() -> void:
 	var dlg := FileDialog.new()
+	dlg.transparent = true # Mac で黒く潰れないように (NeoPHI の教訓)
 	dlg.file_mode = FileDialog.FILE_MODE_OPEN_DIR
 	dlg.access = FileDialog.ACCESS_FILESYSTEM
 	dlg.title = "新しい world を作る空のフォルダを選択"
@@ -306,6 +308,7 @@ func _on_autosave_tick() -> void:
 
 func _show_about() -> void:
 	var dlg := AcceptDialog.new()
+	dlg.transparent = true # Mac で黒く潰れないように (NeoPHI の教訓)
 	dlg.title = "バージョン情報"
 	dlg.dialog_text = CreatorsVersion.about_text()
 	add_child(dlg)
