@@ -98,16 +98,15 @@ func _run() -> void:
 	var td2 := PhiTd.load_file(tmp.path_join("phi.td"))
 	_check(String(td2.find_record("N")["fields"]["name"]) == "Auto Save Test",
 			"autosave wrote phi.td")
-	# About 窓 (第13段: Mac で出ない AcceptDialog をやめ通常 Window に。
-	# transparent + 非 AcceptDialog であること)
+	# About (0.4.3: 別 OS 窓は Mac で出ない事象が続いたため画面内
+	# オーバーレイ = 通常の Control で出す)
 	main.call("_show_about")
 	await process_frame
-	var about_win = main.get("_about_window")
-	_check(about_win is Window and not (about_win is AcceptDialog)
-			and (about_win as Window).transparent
-			and (about_win as Window).visible,
-			"about is a transparent plain window")
-	if about_win != null:
-		(about_win as Window).hide()
+	var about_ov = main.get("_about_overlay")
+	_check(about_ov is Control and not (about_ov is Window)
+			and (about_ov as Control).visible,
+			"about is an in-window overlay")
+	if about_ov != null:
+		(about_ov as Control).hide()
 	print("stage5 checks: ", _checks, " failures: ", _failures)
 	quit(1 if _failures > 0 else 0)

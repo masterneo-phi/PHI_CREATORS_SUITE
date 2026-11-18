@@ -37,13 +37,13 @@ var _pick_switching := false
 var _current_idx := 0
 var _autosave_check: CheckBox
 var _autosave_timer: Timer
-var _about_window: Window = null
+var _about_overlay: Control = null
 var _update_http: HTTPRequest = null
 var _update_busy := false
 var _update_manual := false
 var _update_retried := false
 var _update_info: Dictionary = {}
-var _update_window: Window = null
+var _update_overlay: Control = null
 var _update_label: Label = null
 
 
@@ -325,75 +325,85 @@ func _on_autosave_tick() -> void:
 
 
 func _show_about() -> void:
-	# AcceptDialog は Mac 実機で開かない事象が NeoPHI であったため、
-	# 実績のある通常の Window で出す (2026-11-18 の報告を受けて変更)。
-	if _about_window == null:
-		var win := Window.new()
-		win.visible = false
-		win.transparent = true
-		win.title = ""
-		win.transient = true
-		win.theme = theme
-		win.close_requested.connect(func() -> void: win.hide())
-		var frame := PanelContainer.new()
-		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-		frame.add_theme_stylebox_override("panel",
-				AppTheme.style(Color(0.16, 0.17, 0.20),
-						Color(0.55, 0.58, 0.65)))
-		win.add_child(frame)
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 10)
-		frame.add_child(box)
-		var head := HBoxContainer.new()
-		var tl := Label.new()
-		tl.text = "バージョン情報"
-		tl.add_theme_color_override("font_color", AppTheme.GOLD)
-		head.add_child(tl)
-		var sp := Control.new()
-		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		head.add_child(sp)
-		var close_btn := Button.new()
-		close_btn.text = "×"
-		close_btn.focus_mode = Control.FOCUS_NONE
-		close_btn.pressed.connect(func() -> void: win.hide())
-		head.add_child(close_btn)
-		box.add_child(head)
-		_attach_window_drag(head, win)
+	# Mac 実機では別 OS 窓 (AcceptDialog / Window) が出ない事象が続いた
+	# ため、メイン画面内のオーバーレイ (通常の Control) で出す。
+	# Control はメイン画面の一部として描かれるので必ず表示できる。
+	if _about_overlay == null:
+		_about_overlay = _make_overlay("バージョン情報")
 		var label := Label.new()
 		label.text = CreatorsVersion.about_text()
-		box.add_child(label)
-		add_child(win)
-		_about_window = win
-	var frame_min := (_about_window.get_child(0) as Control) \
-			.get_combined_minimum_size()
-	var need := Vector2i(frame_min) + Vector2i(36, 28)
+		(_about_overlay.get_meta("box") as VBoxContainer).add_child(label)
+		add_child(_about_overlay)
+	_center_overlay(_about_overlay)
+	_about_overlay.show()
+
+
+## 画面内オーバーレイの土台 (暗い全面 + 中央のパネル + 題名行)。
+## 戻り値の Control に meta "panel" / "box" を付けて返す。
+func _make_overlay(title_text: String) -> Control:
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.45)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.add_child(dim)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", AppTheme.style(
+			Color(0.16, 0.17, 0.20), Color(0.55, 0.58, 0.65)))
+	root.add_child(panel)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	panel.add_child(box)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 6)
+	var tl := Label.new()
+	tl.text = title_text
+	tl.add_theme_color_override("font_color", AppTheme.GOLD)
+	head.add_child(tl)
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(sp)
+	var close_btn := Button.new()
+	close_btn.text = "×"
+	close_btn.focus_mode = Control.FOCUS_NONE
+	close_btn.pressed.connect(func() -> void: root.hide())
+	head.add_child(close_btn)
+	box.add_child(head)
+	_attach_panel_drag(head, panel)
+	root.set_meta("panel", panel)
+	root.set_meta("box", box)
+	root.hide()
+	return root
+
+
+## オーバーレイのパネルを中身の大きさで画面中央に置く
+func _center_overlay(root: Control) -> void:
+	var panel := root.get_meta("panel") as PanelContainer
+	var need := panel.get_combined_minimum_size() + Vector2(36, 28)
 	if need.x < 200 or need.y < 120:
-		need = Vector2i(440, 260)
-	var root_size := get_window().size
-	need.x = mini(need.x, maxi(root_size.x - 16, 320))
-	need.y = mini(need.y, maxi(root_size.y - 16, 240))
-	_about_window.min_size = need
-	_about_window.size = need
-	_about_window.position = Vector2i(
-			maxi(0, (root_size.x - need.x) / 2),
-			maxi(0, (root_size.y - need.y) / 2))
-	_about_window.show()
+		need = Vector2(440, 260)
+	need.x = minf(need.x, maxf(size.x - 16.0, 320.0))
+	need.y = minf(need.y, maxf(size.y - 16.0, 240.0))
+	panel.size = need
+	panel.position = Vector2(maxf(0.0, (size.x - need.x) / 2.0),
+			maxf(0.0, (size.y - need.y) / 2.0))
 
 
-## 題名行を掴んで窓を動かせるようにする (About 窓用)
-func _attach_window_drag(band: Control, win: Window) -> void:
-	var state := {"drag": false, "off": Vector2i.ZERO}
+## 題名行を掴んでパネルを動かせるようにする
+func _attach_panel_drag(band: Control, panel: Control) -> void:
+	var state := {"drag": false, "off": Vector2.ZERO}
 	band.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton:
 			var mb := event as InputEventMouseButton
 			if mb.button_index == MOUSE_BUTTON_LEFT:
 				state["drag"] = mb.pressed
 				if mb.pressed:
-					state["off"] = DisplayServer.mouse_get_position() \
-							- win.position
+					state["off"] = band.get_global_mouse_position() \
+							- panel.position
 		elif event is InputEventMouseMotion and bool(state["drag"]):
-			win.position = DisplayServer.mouse_get_position() \
-					- Vector2i(state["off"]))
+			panel.position = band.get_global_mouse_position() \
+					- Vector2(state["off"]))
 
 
 ## macOS のアプリケーションメニューの「About」は Godot 既定では
@@ -498,39 +508,10 @@ func _on_update_response(result: int, response_code: int,
 
 
 func _show_update_dialog() -> void:
-	## 更新のお知らせ窓。About と同じ通常 Window 方式 (Mac 対策)。
-	if _update_window == null:
-		var win := Window.new()
-		win.visible = false
-		win.transparent = true
-		win.title = ""
-		win.transient = true
-		win.theme = theme
-		win.close_requested.connect(func() -> void: win.hide())
-		var frame := PanelContainer.new()
-		frame.add_theme_stylebox_override("panel", AppTheme.style(
-				Color(0.16, 0.17, 0.20), Color(0.55, 0.58, 0.65)))
-		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-		win.add_child(frame)
-		var box := VBoxContainer.new()
-		box.add_theme_constant_override("separation", 10)
-		frame.add_child(box)
-		var head := HBoxContainer.new()
-		head.add_theme_constant_override("separation", 6)
-		box.add_child(head)
-		var title := Label.new()
-		title.text = "更新のお知らせ"
-		title.add_theme_color_override("font_color",
-				Color(0.98, 0.80, 0.35))
-		head.add_child(title)
-		var spacer := Control.new()
-		spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		head.add_child(spacer)
-		var close_btn := Button.new()
-		close_btn.text = "×"
-		close_btn.focus_mode = Control.FOCUS_NONE
-		close_btn.pressed.connect(func() -> void: win.hide())
-		head.add_child(close_btn)
+	## 更新のお知らせ。About と同じ画面内オーバーレイ方式。
+	if _update_overlay == null:
+		_update_overlay = _make_overlay("更新のお知らせ")
+		var box := _update_overlay.get_meta("box") as VBoxContainer
 		_update_label = Label.new()
 		_update_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_update_label.custom_minimum_size = Vector2(400, 0)
@@ -547,11 +528,9 @@ func _show_update_dialog() -> void:
 		var close2 := Button.new()
 		close2.text = "閉じる"
 		close2.focus_mode = Control.FOCUS_NONE
-		close2.pressed.connect(func() -> void: win.hide())
+		close2.pressed.connect(func() -> void: _update_overlay.hide())
 		buttons.add_child(close2)
-		_attach_window_drag(head, win)
-		add_child(win)
-		_update_window = win
+		add_child(_update_overlay)
 	var tag := str(_update_info.get("tag", ""))
 	var rel_name := str(_update_info.get("name", ""))
 	var shown := tag
@@ -562,18 +541,10 @@ func _show_update_dialog() -> void:
 			+ CreatorsVersion.VERSION \
 			+ " です。\nGitHub のリリースページから新しい " \
 			+ "PHI CREATORS SUITE を入手してください。"
-	var frame2 := _update_window.get_child(0) as Control
-	var need := Vector2i(frame2.get_combined_minimum_size()) \
-			+ Vector2i(36, 28)
-	var root_size := get_window().size
-	need.x = mini(need.x, maxi(root_size.x - 16, 340))
-	need.y = mini(need.y, maxi(root_size.y - 16, 240))
-	_update_window.size = need
-	_update_window.position = Vector2i(
-			(root_size - need) / 2) + get_window().position
-	_update_window.show()
+	_center_overlay(_update_overlay)
+	_update_overlay.show()
 
 
 func _on_update_open_page() -> void:
 	OS.shell_open(CreatorsUpdate.page_url(_update_info))
-	_update_window.hide()
+	_update_overlay.hide()

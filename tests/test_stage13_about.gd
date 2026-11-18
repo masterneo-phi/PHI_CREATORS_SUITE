@@ -1,6 +1,6 @@
 extends SceneTree
-## 第13段: バージョン情報を通常 Window で出す (AcceptDialog は Mac で
-## 開かない事象が NeoPHI であったための置き換え)
+## 第13段+0.4.3: バージョン情報は画面内オーバーレイで出す
+## (別 OS 窓は Mac 実機で出ない事象が続いたための最終形)
 
 var _failures := 0
 var _checks := 0
@@ -26,20 +26,20 @@ func _run() -> void:
 	await process_frame
 	main.call("_show_about")
 	await process_frame
-	var win: Window = main.get("_about_window")
-	check(win != null, "About 窓が作られる")
-	check(win != null and win.visible, "About 窓が表示される")
-	check(win != null and win.transparent, "Mac 用に transparent")
-	check(win != null and not (win is AcceptDialog),
-			"AcceptDialog ではない")
+	var ov: Variant = main.get("_about_overlay")
+	check(ov != null, "About オーバーレイが作られる")
+	check(ov != null and (ov as Control).visible,
+			"About オーバーレイが表示される")
+	check(ov != null and not (ov is Window),
+			"別 OS 窓ではない (画面内 Control)")
 	# 2回目も同じ窓を使い回す
 	main.call("_show_about")
 	await process_frame
-	check(main.get("_about_window") == win, "About 窓は使い回す")
+	check(main.get("_about_overlay") == ov, "About オーバーレイは使い回す")
 	# macOS メニュー経由の入口 (タグ付きコールバック)
 	main.call("_on_macos_about_item", null)
 	await process_frame
-	check(win.visible, "メニュー経由でも表示される")
+	check((ov as Control).visible, "メニュー経由でも表示される")
 	# macOS 以外ではフックが無害なこと
 	main.call("_setup_global_menu")
 	check(true, "メニューフックは他 OS で無害")
