@@ -57,7 +57,7 @@ func setup(project: WorldProject) -> void:
 	gra_btn.pressed.connect(_on_gra_dir_pressed)
 	left.add_child(gra_btn)
 	_gra_left_note = Label.new()
-	_gra_left_note.add_theme_font_size_override("font_size", 20)
+	_gra_left_note.add_theme_font_size_override("font_size", AppTheme.rel(_gra_left_note, 20))
 	left.add_child(_gra_left_note)
 	_gra.setup_from_cfg()
 	_gra_root = _gra.root
@@ -331,7 +331,7 @@ func _build_preview(f: Dictionary) -> void:
 	h.add_child(fv)
 	_detail.add_child(h)
 	_gra_note = Label.new()
-	_gra_note.add_theme_font_size_override("font_size", 20)
+	_gra_note.add_theme_font_size_override("font_size", AppTheme.rel(_gra_note, 20))
 	_detail.add_child(_gra_note)
 	_update_preview(f)
 

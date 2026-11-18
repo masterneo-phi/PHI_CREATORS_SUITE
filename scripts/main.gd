@@ -48,6 +48,7 @@ var _update_retried := false
 var _update_info: Dictionary = {}
 var _update_overlay: Control = null
 var _update_label: Label = null
+var _font_spin: SpinBox
 var _launch_overlay: Control = null
 var _launch_client_edit: LineEdit
 var _launch_server_edit: LineEdit
@@ -55,7 +56,7 @@ var _launch_server_edit: LineEdit
 
 func _ready() -> void:
 	add_to_group("creators_main")
-	theme = AppTheme.build()
+	theme = AppTheme.build(_font_size_cfg())
 	_try_hook_menu()
 	_try_hook_menu.call_deferred()
 	_start_menu_hook_retry()
@@ -85,6 +86,19 @@ func _ready() -> void:
 	_autosave_check.text = "自動保存 (60秒ごと)"
 	_autosave_check.toggled.connect(_on_autosave_toggled)
 	bar.add_child(_autosave_check)
+	var font_label := Label.new()
+	font_label.text = "文字サイズ"
+	font_label.add_theme_color_override("font_color", Color.WHITE)
+	bar.add_child(font_label)
+	_font_spin = SpinBox.new()
+	_font_spin.min_value = 14
+	_font_spin.max_value = 48
+	_font_spin.step = 1
+	_font_spin.value = _font_size_cfg()
+	_font_spin.custom_minimum_size = Vector2(96, 0)
+	_font_spin.tooltip_text = "画面全体の文字の大きさを変えます"
+	_font_spin.value_changed.connect(_on_font_size_changed)
+	bar.add_child(_font_spin)
 	var about_btn := Button.new()
 	about_btn.text = "バージョン情報"
 	about_btn.pressed.connect(_show_about)
@@ -452,6 +466,32 @@ func _editor_index(scene_key: String) -> int:
 		if String(EDITORS[i]["scene"]) == scene_key:
 			return i
 	return 0
+
+
+## 文字サイズは creators.cfg の ui/font_size に持つ (既定は 27)
+func _font_size_cfg() -> int:
+	var cfg := ConfigFile.new()
+	cfg.load("user://creators.cfg")
+	return clampi(int(cfg.get_value("ui", "font_size", AppTheme.FONT_SIZE)),
+			14, 48)
+
+
+func _on_font_size_changed(v: float) -> void:
+	var size := int(v)
+	theme = AppTheme.build(size)
+	# 相対指定の文字サイズも追随するよう、開いているエディタを作り直す
+	for key in _editors.keys():
+		(_editors[key] as Control).queue_free()
+	_editors.clear()
+	_pick_handler = Callable()
+	_pick_return_idx = -1
+	if _project != null:
+		_on_editor_selected(_current_idx)
+	var cfg := ConfigFile.new()
+	cfg.load("user://creators.cfg")
+	cfg.set_value("ui", "font_size", size)
+	cfg.save("user://creators.cfg")
+	_status_label.text = "文字サイズを %d にしました" % size
 
 
 func _on_autosave_toggled(on: bool) -> void:

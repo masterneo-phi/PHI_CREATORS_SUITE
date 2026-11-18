@@ -82,7 +82,7 @@ func setup(project: WorldProject) -> void:
 	gra_btn.pressed.connect(_on_gra_dir_pressed)
 	left.add_child(gra_btn)
 	_gra_left_note = Label.new()
-	_gra_left_note.add_theme_font_size_override("font_size", 20)
+	_gra_left_note.add_theme_font_size_override("font_size", AppTheme.rel(_gra_left_note, 20))
 	left.add_child(_gra_left_note)
 	_gra.setup_from_cfg()
 	_update_gra_left_note()
@@ -461,7 +461,7 @@ func _sub_help(text: String) -> void:
 	l.text = text
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.modulate = Color(0.75, 0.75, 0.75)
-	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_font_size_override("font_size", AppTheme.rel(l, 20))
 	_sub_detail.add_child(l)
 
 
@@ -764,7 +764,7 @@ func _a_editor(f: Dictionary, rebuild: Callable) -> void:
 		var bit := int(def[0])
 		var cb := CheckBox.new()
 		cb.text = String(def[1])
-		cb.add_theme_font_size_override("font_size", 23)
+		cb.add_theme_font_size_override("font_size", AppTheme.rel(cb, 23))
 		cb.button_pressed = (int(state["value"]) & bit) != 0
 		cb.toggled.connect(func(on: bool) -> void:
 			var v := int(state["value"])
@@ -793,7 +793,7 @@ func _d_editor(f: Dictionary, rebuild: Callable) -> void:
 		var ch := String(def[0])
 		var cb := CheckBox.new()
 		cb.text = "%s %s" % [ch, String(def[1])]
-		cb.add_theme_font_size_override("font_size", 23)
+		cb.add_theme_font_size_override("font_size", AppTheme.rel(cb, 23))
 		cb.button_pressed = cur.contains(ch)
 		cb.toggled.connect(func(on: bool) -> void:
 			var set := {}
@@ -1026,7 +1026,7 @@ func _build_enemy_gra(rec: Dictionary) -> void:
 	gh.add_child(gob)
 	_detail.add_child(gh)
 	_gra_note = Label.new()
-	_gra_note.add_theme_font_size_override("font_size", 20)
+	_gra_note.add_theme_font_size_override("font_size", AppTheme.rel(_gra_note, 20))
 	_detail.add_child(_gra_note)
 	_update_enemy_preview()
 

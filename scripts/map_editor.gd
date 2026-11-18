@@ -420,7 +420,7 @@ func _show_e(code: int) -> void:
 	for ch in PhiFd.FLAG_NAMES.keys():
 		var c := CheckBox.new()
 		c.text = "%s: %s" % [ch, String(PhiFd.FLAG_NAMES[ch])]
-		c.add_theme_font_size_override("font_size", 23)
+		c.add_theme_font_size_override("font_size", AppTheme.rel(c, 23))
 		c.set_meta("flag_char", ch)
 		c.button_pressed = flags.contains(ch)
 		c.toggled.connect(func(_on: bool) -> void:

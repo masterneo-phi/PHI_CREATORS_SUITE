@@ -50,14 +50,24 @@ static func _check_icons() -> Dictionary:
 	return {"checked": checked, "unchecked": unchecked}
 
 
-static func build() -> Theme:
+## 基準サイズ (27) 前提で書かれた相対フォントサイズを、
+## そのコントロールの現在のテーマ既定サイズに合わせて換算する
+static func rel(control: Control, orig: int) -> int:
+	var base := control.get_theme_default_font_size()
+	if base <= 0:
+		base = FONT_SIZE
+	return maxi(10, int(round(orig * float(base) / 27.0)))
+
+
+static func build(font_size: int = FONT_SIZE) -> Theme:
+	font_size = clampi(font_size, 10, 60)
 	var t := Theme.new()
 	var font := SystemFont.new()
 	font.font_names = PackedStringArray([
 		"Noto Sans JP", "Noto Sans CJK JP", "Segoe UI", "BIZ UDPGothic",
 		"Hiragino Sans", "Yu Gothic", "Meiryo", "sans-serif"])
 	t.default_font = font
-	t.default_font_size = FONT_SIZE
+	t.default_font_size = font_size
 	# ボタンはシルバー地に黒文字
 	t.set_stylebox("normal", "Button", _flat(SILVER))
 	t.set_stylebox("hover", "Button", _flat(SILVER_HOVER))
@@ -68,12 +78,13 @@ static func build() -> Theme:
 	t.set_color("font_hover_color", "Button", INK)
 	t.set_color("font_pressed_color", "Button", INK)
 	t.set_color("font_disabled_color", "Button", Color(0.25, 0.25, 0.27))
-	t.set_font_size("font_size", "Button", FONT_SIZE)
+	t.set_font_size("font_size", "Button", font_size)
 	# 入力部品の文字も大きく
 	for cls in ["LineEdit", "TextEdit", "SpinBox", "OptionButton",
 			"CheckBox", "ItemList", "Tree", "Label", "TabBar"]:
-		t.set_font_size("font_size", cls, FONT_SIZE)
-	t.set_constant("item_height", "ItemList", 46)
+		t.set_font_size("font_size", cls, font_size)
+	t.set_constant("item_height", "ItemList",
+			maxi(28, int(round(46.0 * font_size / 27.0))))
 	t.set_constant("v_separation", "ItemList", 6)
 	# 選択中をはっきりさせる
 	t.set_color("font_selected_color", "ItemList", Color.WHITE)

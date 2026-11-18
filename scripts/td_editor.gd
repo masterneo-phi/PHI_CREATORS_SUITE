@@ -29,7 +29,7 @@ func setup(project: WorldProject) -> void:
 func _section(title: String) -> void:
 	var l := Label.new()
 	l.text = "■ " + title
-	l.add_theme_font_size_override("font_size", 30)
+	l.add_theme_font_size_override("font_size", AppTheme.rel(l, 30))
 	l.add_theme_color_override("font_color", AppTheme.GOLD)
 	_box.add_child(l)
 
@@ -263,7 +263,7 @@ func _build_u_options() -> void:
 	for def in HelpTexts.U_DEFS:
 		var key := String(def["key"])
 		var cb := CheckBox.new()
-		cb.add_theme_font_size_override("font_size", 23)
+		cb.add_theme_font_size_override("font_size", AppTheme.rel(cb, 23))
 		cb.text = String(def["label"])
 		cb.tooltip_text = String(def["help"])
 		cb.button_pressed = _u_flag_state(def)

@@ -133,7 +133,7 @@ static func _help(parent: Control, text: String) -> Label:
 	l.text = text
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.modulate = Color(0.75, 0.75, 0.75)
-	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_font_size_override("font_size", AppTheme.rel(l, 20))
 	parent.add_child(l)
 	return l
 
@@ -267,7 +267,7 @@ static func build_item_form(parent: Control, data: String,
 		var vb := VBoxContainer.new()
 		var ml := Label.new()
 		ml.text = "op%d %s" % [k, String(meanings0[k])]
-		ml.add_theme_font_size_override("font_size", 20)
+		ml.add_theme_font_size_override("font_size", AppTheme.rel(ml, 20))
 		vb.add_child(ml)
 		op_labels.append(ml)
 		var e := LineEdit.new()
