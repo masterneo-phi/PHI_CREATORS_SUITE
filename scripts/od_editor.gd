@@ -6,6 +6,17 @@ var _od: PhiOd
 var _list: ItemList
 var _detail: VBoxContainer
 var _current := -1
+var _gra := GraLibrary.new()
+var _gra_root := ""
+var _gra_names: Array[String] = []
+var _gra_paths := {}
+var _gra_cache := {}
+var _gra_left_note: Label
+var _gra_dialog: FileDialog
+var _sheet_rect: TextureRect
+var _frame_rect: TextureRect
+var _frame_label: Label
+var _gra_note: Label
 
 const DIR_LABELS: Array[String] = [
 	"北", "東", "南", "西", "固定 北面", "固定 東面", "固定 南面", "固定 西面",
@@ -32,6 +43,17 @@ func setup(project: WorldProject) -> void:
 	btns.add_child(add_btn)
 	btns.add_child(del_btn)
 	left.add_child(btns)
+	var gra_btn := Button.new()
+	gra_btn.text = "キャラグラフォルダを選ぶ"
+	gra_btn.pressed.connect(_on_gra_dir_pressed)
+	left.add_child(gra_btn)
+	_gra_left_note = Label.new()
+	_gra_left_note.add_theme_font_size_override("font_size", 20)
+	left.add_child(_gra_left_note)
+	_gra.setup_from_cfg()
+	_gra_root = _gra.root
+	_scan_gra()
+	_update_gra_left_note()
 	_list = ItemList.new()
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_list.item_selected.connect(func(idx: int) -> void: _show(idx))
@@ -92,6 +114,7 @@ func _show(idx: int) -> void:
 		_detail.add_child(l)
 		return
 	var f: Dictionary = rec["fields"]
+	_build_preview(f)
 	var rebuild := func() -> void:
 		_od.touch(rec)
 		_refresh()
@@ -114,16 +137,46 @@ func _show(idx: int) -> void:
 	_num("配置 Y", int(f["y"]), func(v: int) -> void:
 		f["y"] = v
 		rebuild.call())
-	_line("グラフィック名 (最大15文字)", String(f["gname"]), func(t: String) -> void:
+	var gh := HBoxContainer.new()
+	var gl := Label.new()
+	gl.text = "グラフィック名"
+	gl.custom_minimum_size = Vector2(170, 0)
+	gh.add_child(gl)
+	var ge := LineEdit.new()
+	ge.text = String(f["gname"])
+	ge.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ge.text_changed.connect(func(t: String) -> void:
 		f["gname"] = t
-		rebuild.call())
+		rebuild.call()
+		_update_preview(f))
+	gh.add_child(ge)
+	var gob := OptionButton.new()
+	gob.tooltip_text = "フォルダ内のグラから選ぶ"
+	if _gra_names.is_empty():
+		gob.add_item("(グラなし)")
+		gob.disabled = true
+	else:
+		for gn in _gra_names:
+			gob.add_item(gn)
+		var cur := _gra_names.find(String(f["gname"]))
+		if cur >= 0:
+			gob.select(cur)
+	gob.item_selected.connect(func(i: int) -> void:
+		var gn := gob.get_item_text(i)
+		ge.text = gn
+		f["gname"] = gn
+		rebuild.call()
+		_update_preview(f))
+	gh.add_child(gob)
+	_detail.add_child(gh)
 	var dir_ob := OptionButton.new()
 	for n in DIR_LABELS:
 		dir_ob.add_item(n)
 	dir_ob.select(int(f["dir"]))
 	dir_ob.item_selected.connect(func(i: int) -> void:
 		f["dir"] = i
-		rebuild.call())
+		rebuild.call()
+		_update_preview(f))
 	var dh := HBoxContainer.new()
 	var dl := Label.new()
 	dl.text = "向き"
@@ -137,7 +190,8 @@ func _show(idx: int) -> void:
 		rebuild.call())
 	_check("32x32 グラフィック (デブ)", bool(f["debu"]), func(on: bool) -> void:
 		f["debu"] = on
-		rebuild.call())
+		rebuild.call()
+		_update_preview(f))
 	_check("看板型", bool(f["board"]), func(on: bool) -> void:
 		f["board"] = on
 		if on:
@@ -192,3 +246,105 @@ func _check(label: String, value: bool, on_change: Callable) -> void:
 	c.button_pressed = value
 	c.toggled.connect(func(on: bool) -> void: on_change.call(on))
 	_detail.add_child(c)
+
+
+# ------------------------------------------------------------ グラ表示
+
+func _on_gra_dir_pressed() -> void:
+	if _gra_dialog == null:
+		_gra_dialog = FileDialog.new()
+		_gra_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+		_gra_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_gra_dialog.transparent = true
+		_gra_dialog.title = "キャラグラフォルダを選ぶ"
+		_gra_dialog.dir_selected.connect(_on_gra_dir_selected)
+		add_child(_gra_dialog)
+	if _gra_root != "" and DirAccess.dir_exists_absolute(_gra_root):
+		_gra_dialog.current_dir = _gra_root
+	_gra_dialog.popup_centered(Vector2i(900, 600))
+
+
+func _on_gra_dir_selected(dir: String) -> void:
+	_gra_root = dir
+	_gra.set_root(dir)
+	_scan_gra()
+	_update_gra_left_note()
+	if _current >= 0:
+		_show(_current)
+
+
+func _update_gra_left_note() -> void:
+	if _gra_left_note == null:
+		return
+	if _gra_names.is_empty():
+		_gra_left_note.text = "グラが見つかりません"
+	else:
+		_gra_left_note.text = "グラ %d 件" % _gra_names.size()
+
+
+func _scan_gra() -> void:
+	_gra.scan()
+	_gra_names = _gra.names
+	_gra_paths = _gra.paths
+
+
+func _gra_data(path: String) -> Dictionary:
+	return _gra.data_for(path)
+
+
+func _build_preview(f: Dictionary) -> void:
+	var head := Label.new()
+	head.text = "■ グラフィック"
+	head.add_theme_color_override("font_color", AppTheme.GOLD)
+	_detail.add_child(head)
+	var h := HBoxContainer.new()
+	var sv := VBoxContainer.new()
+	_sheet_rect = TextureRect.new()
+	_sheet_rect.custom_minimum_size = Vector2(144, 192)
+	_sheet_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_sheet_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_sheet_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sv.add_child(_sheet_rect)
+	var sl := Label.new()
+	sl.text = "全体"
+	sv.add_child(sl)
+	h.add_child(sv)
+	var fv := VBoxContainer.new()
+	_frame_rect = TextureRect.new()
+	_frame_rect.custom_minimum_size = Vector2(128, 128)
+	_frame_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_frame_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_frame_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fv.add_child(_frame_rect)
+	_frame_label = Label.new()
+	_frame_label.text = "向き"
+	fv.add_child(_frame_label)
+	h.add_child(fv)
+	_detail.add_child(h)
+	_gra_note = Label.new()
+	_gra_note.add_theme_font_size_override("font_size", 20)
+	_detail.add_child(_gra_note)
+	_update_preview(f)
+
+
+func _update_preview(f: Dictionary) -> void:
+	if _sheet_rect == null:
+		return
+	var gname := String(f["gname"])
+	var path := String(_gra_paths.get(gname.to_lower(), ""))
+	if path == "":
+		_sheet_rect.texture = null
+		_frame_rect.texture = null
+		_frame_label.text = "向き"
+		_gra_note.text = "グラ '%s' が見つかりません (フォルダを確認)" % gname
+		return
+	var data := _gra_data(path)
+	if data.is_empty():
+		_gra_note.text = "グラ '%s' を読み込めません" % gname
+		return
+	var img: Image = data["img"]
+	_sheet_rect.texture = data["tex"]
+	_frame_rect.texture = _gra.frame_texture(img, int(f["dir"]) % 4,
+			bool(f["debu"]))
+	_frame_label.text = "向き: %s" % DIR_LABELS[int(f["dir"])]
+	_gra_note.text = path.get_file()

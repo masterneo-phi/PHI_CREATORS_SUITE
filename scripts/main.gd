@@ -14,7 +14,7 @@ const MapEditor := preload("res://scripts/map_editor.gd")
 
 const EDITORS: Array[Dictionary] = [
 	{"name": "世界設定 (phi.td)", "scene": "td"},
-	{"name": "アナウンス (phi.bb / phi.inf)", "scene": "announce"},
+	{"name": "アナウンス (phi.bb/inf)", "scene": "announce"},
 	{"name": "マップ (phi.dd / phi.fd)", "scene": "map"},
 	{"name": "スイッチ (phi.swt)", "scene": "swt"},
 	{"name": "オブジェクト (phi.od)", "scene": "od"},
@@ -94,7 +94,7 @@ func _ready() -> void:
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(split)
 	_editor_list = ItemList.new()
-	_editor_list.custom_minimum_size = Vector2(330, 0)
+	_editor_list.custom_minimum_size = Vector2(315, 0)
 	for e in EDITORS:
 		_editor_list.add_item(String(e["name"]))
 	_editor_list.item_selected.connect(_on_editor_selected)

@@ -92,6 +92,14 @@ func block_summary(b: Dictionary) -> String:
 	return ("Lv%s " % lv if lv != "" else "") + item
 
 
+func insert_record(at: int, rec: Dictionary) -> void:
+	raw_lines.lines.insert(at, PackedByteArray())
+	raw_lines.eols.insert(at, "\n".to_utf8_buffer())
+	raw_lines.dirty.insert(at, false)
+	rec["modified"] = true
+	records.insert(at, rec)
+
+
 func remove_record(idx: int) -> void:
 	raw_lines.lines.remove_at(idx)
 	raw_lines.eols.remove_at(idx)

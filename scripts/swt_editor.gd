@@ -49,6 +49,18 @@ func setup(project: WorldProject) -> void:
 	ai_imp.text = "AIから取り込む"
 	ai_imp.pressed.connect(_show_ai_import)
 	btns.add_child(ai_imp)
+	var lib_btn := Button.new()
+	lib_btn.text = "作例ライブラリ"
+	lib_btn.pressed.connect(_show_library)
+	btns.add_child(lib_btn)
+	# AI ボタンは水色にして目立たせる
+	for b in [ai_ask, ai_imp]:
+		b.add_theme_stylebox_override("normal",
+				AppTheme.style(Color(0.62, 0.85, 0.98)))
+		b.add_theme_stylebox_override("hover",
+				AppTheme.style(Color(0.76, 0.92, 1.0)))
+		b.add_theme_stylebox_override("pressed",
+				AppTheme.style(Color(0.48, 0.76, 0.96)))
 	left.add_child(btns)
 	_list = ItemList.new()
 	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -457,10 +469,48 @@ func _show_a(rec: Dictionary, f: Dictionary) -> void:
 	_spin_row("待ち", int(f["wait"]), 9999, func(v: int) -> void:
 		f["wait"] = v
 		_commit(rec))
-	_line_row("末尾 (テキスト等)", String(f.get("text", "")),
-			func(t: String) -> void:
-		f["text"] = t
-		_commit(rec))
+	var tail_kind := int(f.get("tail_kind", -1))
+	if tail_kind == 1:
+		var hl := Label.new()
+		hl.text = "末尾はテレポート (x) です"
+		hl.modulate = Color(0.75, 0.75, 0.75)
+		_detail.add_child(hl)
+		var parts := String(f.get("text", "")).split(" ", false)
+		var st := {"x": 0, "y": 0}
+		if parts.size() >= 3:
+			st["x"] = String(parts[1]).to_int()
+			st["y"] = String(parts[2]).to_int()
+		var x_spin := _spin_row("転送先 X", int(st["x"]), 999,
+				func(v: int) -> void:
+			st["x"] = v
+			f["text"] = "x %03d %03d" % [v, int(st["y"])]
+			_commit(rec))
+		var y_spin := _spin_row("転送先 Y", int(st["y"]), 999,
+				func(v: int) -> void:
+			st["y"] = v
+			f["text"] = "x %03d %03d" % [int(st["x"]), v]
+			_commit(rec))
+		_pick_button("転送先をマップで指定", func(x: int, y: int) -> void:
+			st["x"] = x
+			st["y"] = y
+			x_spin.value = x
+			y_spin.value = y
+			f["text"] = "x %03d %03d" % [x, y]
+			_commit(rec))
+	elif tail_kind == 2:
+		var hl2 := Label.new()
+		hl2.text = "末尾はフラグ操作 (f) です"
+		hl2.modulate = Color(0.75, 0.75, 0.75)
+		_detail.add_child(hl2)
+		_line_row("フラグ (flagno)", String(f.get("text", "")).substr(2),
+				func(t: String) -> void:
+			f["text"] = "f " + t
+			_commit(rec))
+	else:
+		_line_row("末尾 (テキスト等)", String(f.get("text", "")),
+				func(t: String) -> void:
+			f["text"] = t
+			_commit(rec))
 
 
 func _show_m(rec: Dictionary, f: Dictionary) -> void:

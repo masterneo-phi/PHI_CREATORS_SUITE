@@ -99,6 +99,15 @@ func _show(bi: int) -> void:
 	title.text = "レシピ: " + _crt.block_summary(b)
 	title.add_theme_color_override("font_color", AppTheme.GOLD)
 	_detail.add_child(title)
+	var s_count := 0
+	var has_product := false
+	for i in range(int(b["start"]), int(b["end"]) + 1):
+		var rec := _crt.records[i]
+		var kind := String(rec["kind"])
+		if kind == "S":
+			s_count += 1
+		if kind in ["P", "F"]:
+			has_product = true
 	for i in range(int(b["start"]), int(b["end"]) + 1):
 		var rec := _crt.records[i]
 		var kind := String(rec["kind"])
@@ -115,21 +124,70 @@ func _show(bi: int) -> void:
 			continue
 		var head := Label.new()
 		head.text = ":%s %s" % [kind, String(KIND_LABELS[kind])]
+		head.add_theme_color_override("font_color", AppTheme.GOLD)
 		_detail.add_child(head)
-		var e := LineEdit.new()
-		e.text = String(rec["fields"]["rest"])
 		var rec_ref := rec
-		e.text_changed.connect(func(t: String) -> void:
-			rec_ref["fields"]["rest"] = t
-			_crt.touch(rec_ref)
-			_blocks = _crt.blocks()
-			_list.set_item_text(bi, _crt.block_summary(_blocks[bi])))
-		_detail.add_child(e)
+		var idx_ref := i
+		if kind == "L":
+			var spin := SpinBox.new()
+			spin.min_value = 0
+			spin.max_value = 9999
+			spin.value = String(rec["fields"]["rest"]).strip_edges().to_int()
+			spin.value_changed.connect(func(v: float) -> void:
+				rec_ref["fields"]["rest"] = " %04d" % int(v)
+				_crt.touch(rec_ref)
+				_blocks = _crt.blocks()
+				_list.set_item_text(bi, _crt.block_summary(_blocks[bi])))
+			_detail.add_child(spin)
+		else:
+			var data := String(rec["fields"]["rest"]).lstrip(" ")
+			var applied := func(new_data: String) -> void:
+				rec_ref["fields"]["rest"] = " " + new_data
+				_crt.touch(rec_ref)
+				_blocks = _crt.blocks()
+				_list.set_item_text(bi, _crt.block_summary(_blocks[bi]))
+			if not ItemForm.build_item_form(_detail, data, applied):
+				var e := LineEdit.new()
+				e.text = data
+				e.text_changed.connect(func(t: String) -> void:
+					applied.call(t))
+				_detail.add_child(e)
 		var help := Label.new()
 		help.text = String(KIND_HELP[kind])
 		help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		help.modulate = Color(0.75, 0.75, 0.75)
 		_detail.add_child(help)
+		if kind == "S":
+			var sdel := Button.new()
+			sdel.text = "この素材を削除"
+			sdel.pressed.connect(func() -> void:
+				_crt.remove_record(idx_ref)
+				_refresh()
+				_show(bi))
+			_detail.add_child(sdel)
+	if s_count != 2:
+		var warn := Label.new()
+		warn.text = "⚠ 素材 (:S) はちょうど2つ必要です (現在 %d つ)" % s_count
+		warn.add_theme_color_override("font_color", Color(1.0, 0.6, 0.4))
+		_detail.add_child(warn)
+	if not has_product:
+		var warn2 := Label.new()
+		warn2.text = "⚠ 生成物 (:P か :F) が必要です"
+		warn2.add_theme_color_override("font_color", Color(1.0, 0.6, 0.4))
+		_detail.add_child(warn2)
+	var sadd := Button.new()
+	sadd.text = "素材 (:S) を追加"
+	sadd.pressed.connect(func() -> void:
+		var proto := {"kind": "S", "fields": {"rest":
+				" Material                      0001 01 n 00 00 00 00"},
+				"modified": true}
+		var at := int(b["end"])
+		if String(_crt.records[at]["kind"]) != "term":
+			at += 1
+		_crt.insert_record(at, proto)
+		_refresh()
+		_show(bi))
+	_detail.add_child(sadd)
 	var del := Button.new()
 	del.text = "このレシピを削除"
 	del.pressed.connect(func() -> void: _delete_block(bi))

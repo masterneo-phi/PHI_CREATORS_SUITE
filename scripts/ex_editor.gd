@@ -115,10 +115,26 @@ func _show(idx: int) -> void:
 			f["ip"] = t
 			_touch(rec, idx))
 	else:
-		_field("データ (ワイルドカード可)", String(f["rest"]).lstrip(" "),
-				func(t: String) -> void:
-			f["rest"] = " " + t
-			_touch(rec, idx))
+		var data := String(f["rest"]).lstrip(" ")
+		var applied := func(new_data: String) -> void:
+			f["rest"] = " " + new_data
+			_touch(rec, idx)
+		var ok := false
+		if kind in ["I", "i"]:
+			ok = ItemForm.build_item_form(_detail, data, applied)
+		else:
+			ok = ItemForm.build_spell_form(_detail, data, applied)
+		if not ok:
+			_field("データ (ワイルドカード可)", data,
+					func(t: String) -> void:
+				f["rest"] = " " + t
+				_touch(rec, idx))
+		var help := Label.new()
+		help.text = "パターン: ワイルドカード (* ? - など) が使えます" \
+				if kind in ["I", "i"] else \
+				"魔法パターン: 効果番号 -- はワイルドカード"
+		help.modulate = Color(0.75, 0.75, 0.75)
+		_detail.add_child(help)
 
 
 func _touch(rec: Dictionary, idx: int) -> void:

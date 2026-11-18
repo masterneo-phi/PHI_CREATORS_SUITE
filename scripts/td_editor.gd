@@ -38,7 +38,7 @@ func _row(label: String, control: Control, help: String) -> void:
 	var h := HBoxContainer.new()
 	var l := Label.new()
 	l.text = label
-	l.custom_minimum_size = Vector2(310, 0)
+	l.custom_minimum_size = Vector2(265, 0)
 	h.add_child(l)
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(control)
@@ -46,7 +46,7 @@ func _row(label: String, control: Control, help: String) -> void:
 		var hl := Label.new()
 		hl.text = help
 		hl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hl.custom_minimum_size = Vector2(370, 0)
+		hl.custom_minimum_size = Vector2(305, 0)
 		hl.modulate = Color(0.75, 0.75, 0.75)
 		h.add_child(hl)
 	_box.add_child(h)
@@ -182,7 +182,10 @@ func _build_o_flags() -> void:
 	acheck.button_pressed = a_idx >= 0
 	var ax := _spin(0, 999, 0)
 	var ay := _spin(0, 999, 0)
+	ax.custom_minimum_size.x = 110
+	ay.custom_minimum_size.x = 110
 	var aid := LineEdit.new()
+	aid.custom_minimum_size.x = 100
 	aid.placeholder_text = "ID接頭辞"
 	if a_idx >= 0 and a_idx + 3 < tokens.size():
 		ax.value = tokens[a_idx + 1].to_int()
@@ -260,6 +263,7 @@ func _build_u_options() -> void:
 	for def in HelpTexts.U_DEFS:
 		var key := String(def["key"])
 		var cb := CheckBox.new()
+		cb.add_theme_font_size_override("font_size", 23)
 		cb.text = String(def["label"])
 		cb.tooltip_text = String(def["help"])
 		cb.button_pressed = _u_flag_state(def)

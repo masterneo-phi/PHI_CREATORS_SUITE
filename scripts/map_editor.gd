@@ -147,7 +147,8 @@ func _build_editor_ui() -> void:
 		_canvas.queue_redraw())
 	left.add_child(swt_check)
 	var pl := Label.new()
-	pl.text = "■ 地形パレット (右クリックで吸い取り)"
+	pl.text = "■ 地形パレット"
+	pl.tooltip_text = "右クリックでマップから吸い取り"
 	pl.clip_text = true
 	pl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	left.add_child(pl)
