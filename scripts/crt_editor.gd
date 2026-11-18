@@ -1,4 +1,4 @@
-extends HBoxContainer
+extends HSplitContainer
 ## クリエイトエディタ (phi.crt)。FORMAT_SPEC §9。
 ## 第5段: エネミーエディタと同じく「1ブロック = 1クリエイト設定」で扱う。
 ## レシピ = [:L] :P/:F :S :S の厳密な並びを崩さないよう、
@@ -47,6 +47,7 @@ func setup(project: WorldProject) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(scroll)
+	split_offset = int(left.custom_minimum_size.x)
 	_detail = VBoxContainer.new()
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_detail)

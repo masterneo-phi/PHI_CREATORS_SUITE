@@ -1,4 +1,4 @@
-extends HBoxContainer
+extends HSplitContainer
 ## マスター権限エディタ (phi.ad)。FORMAT_SPEC §13。
 ## ブロック = :<uid> <ip> <権限文字列> [:A 領土] '.'
 
@@ -39,6 +39,7 @@ func setup(project: WorldProject) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(scroll)
+	split_offset = int(left.custom_minimum_size.x)
 	_detail = VBoxContainer.new()
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_detail)

@@ -1,4 +1,4 @@
-extends HBoxContainer
+extends HSplitContainer
 ## マップエディタ (phi.dd + phi.fd + phi.od 統合)。FORMAT_SPEC §2/§3/§8。
 ## サイズは phi_dm.cnf 由来 (WorldProject.map_size)。無い場合は
 ## 最初にサイズを指定して新規作成する (正方形のみ)。
@@ -22,7 +22,12 @@ var _cell_label: Label
 var _sheet_ob: OptionButton
 var _chip_dir := ""
 var _tool_buttons := {}
+var _zoom_ob: OptionButton
+var _zoom2x_check: CheckBox
+var _zoom_base := 24
+var _zoom_2x := false
 
+const ZOOM_SIZES: Array[int] = [8, 12, 16, 24, 32, 48]
 const TOOLS: Array = [
 	["terrain", "地形ペン"], ["fill", "塗りつぶし"], ["surface", "見た目(:T)"],
 	["area", "エリアペン"], ["object", "オブジェクト"],
@@ -71,6 +76,7 @@ func _build_editor_ui() -> void:
 	var left_scroll := ScrollContainer.new()
 	left_scroll.custom_minimum_size = Vector2(350, 0)
 	add_child(left_scroll)
+	split_offset = 350
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	left_scroll.add_child(left)
@@ -96,15 +102,23 @@ func _build_editor_ui() -> void:
 	_roof_check.toggled.connect(func(on: bool) -> void:
 		_canvas.pen_roof = on)
 	left.add_child(_roof_check)
-	var zoom_ob := OptionButton.new()
-	for z in [8, 12, 16, 24, 32, 48]:
-		zoom_ob.add_item("%d px" % z)
-	zoom_ob.select(3)
-	zoom_ob.item_selected.connect(func(i: int) -> void:
-		_canvas.cell_px = [8, 12, 16, 24, 32, 48][i]
-		_canvas.queue_redraw()
-		_update_scrollbars())
-	left.add_child(zoom_ob)
+	_zoom_ob = OptionButton.new()
+	for z in ZOOM_SIZES:
+		_zoom_ob.add_item("%d px" % z)
+	_zoom_ob.select(3)
+	_zoom_ob.item_selected.connect(func(i: int) -> void:
+		_zoom_base = ZOOM_SIZES[i]
+		_apply_zoom()
+		_save_zoom_cfg())
+	left.add_child(_zoom_ob)
+	_zoom2x_check = CheckBox.new()
+	_zoom2x_check.text = "拡大 ×2"
+	_zoom2x_check.toggled.connect(func(on: bool) -> void:
+		_zoom_2x = on
+		_apply_zoom()
+		_save_zoom_cfg())
+	left.add_child(_zoom2x_check)
+	_load_zoom_cfg()
 	var area_check := CheckBox.new()
 	area_check.text = "エリアを表示"
 	area_check.toggled.connect(func(on: bool) -> void:
@@ -172,7 +186,9 @@ func _build_editor_ui() -> void:
 	fs.content_margin_top = 10
 	fs.content_margin_bottom = 10
 	frame.add_theme_stylebox_override("panel", fs)
-	add_child(frame)
+	var inner := HSplitContainer.new()
+	add_child(inner)
+	inner.add_child(frame)
 	var mid := VBoxContainer.new()
 	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	frame.add_child(mid)
@@ -183,7 +199,7 @@ func _build_editor_ui() -> void:
 	_canvas.dd = _project.dd
 	_canvas.fd = _project.fd
 	_canvas.od = _project.od
-	_canvas.cell_px = 24
+	_canvas.cell_px = _zoom_base * (2 if _zoom_2x else 1)
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_canvas.hover_changed.connect(_on_hover)
@@ -211,7 +227,8 @@ func _build_editor_ui() -> void:
 	# 右: 情報とオブジェクト詳細
 	var right := VBoxContainer.new()
 	right.custom_minimum_size = Vector2(370, 0)
-	add_child(right)
+	inner.add_child(right)
+	inner.split_offset = 1000000 # 右は最小幅で開始
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(_status)
@@ -431,6 +448,34 @@ func _on_hover(x: int, y: int) -> void:
 
 
 ## --- スクロールバー ---
+
+func _apply_zoom() -> void:
+	if _canvas == null:
+		return
+	_canvas.cell_px = _zoom_base * (2 if _zoom_2x else 1)
+	_canvas.queue_redraw()
+	_update_scrollbars()
+
+
+func _save_zoom_cfg() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load("user://creators.cfg")
+	cfg.set_value("map", "zoom", _zoom_base)
+	cfg.set_value("map", "zoom_2x", _zoom_2x)
+	cfg.save("user://creators.cfg")
+
+
+func _load_zoom_cfg() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://creators.cfg") != OK:
+		return
+	_zoom_base = int(cfg.get_value("map", "zoom", 24))
+	_zoom_2x = bool(cfg.get_value("map", "zoom_2x", false))
+	var idx := ZOOM_SIZES.find(_zoom_base)
+	if idx >= 0:
+		_zoom_ob.select(idx)
+	_zoom2x_check.button_pressed = _zoom_2x
+
 
 func _update_scrollbars() -> void:
 	if _canvas == null or _project == null or _project.dd == null:

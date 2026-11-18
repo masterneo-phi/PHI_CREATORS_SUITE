@@ -67,6 +67,7 @@ const FALLBACK_COLORS := {
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_ALL
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST # 拡大時もドットを保つ
 
 
 func cell_at_pos(p: Vector2) -> Vector2i:

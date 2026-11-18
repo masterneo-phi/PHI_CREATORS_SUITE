@@ -1,4 +1,4 @@
-extends HBoxContainer
+extends HSplitContainer
 ## スイッチエディタ (phi.swt)。FORMAT_SPEC §7。
 ## 左の一覧で選び、右でプルダウン (条件・動作の種別) と
 ## 欄入力で編集する。原文の行も常に表示し、手書き編集もできる。
@@ -57,6 +57,7 @@ func setup(project: WorldProject) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(scroll)
+	split_offset = int(left.custom_minimum_size.x)
 	_detail = VBoxContainer.new()
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_detail)

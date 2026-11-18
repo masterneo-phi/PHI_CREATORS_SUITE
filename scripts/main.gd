@@ -42,6 +42,7 @@ var _autosave_timer: Timer
 func _ready() -> void:
 	add_to_group("creators_main")
 	theme = AppTheme.build()
+	_setup_global_menu()
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
@@ -316,3 +317,17 @@ func _show_about() -> void:
 	dlg.dialog_text = CreatorsVersion.about_text()
 	add_child(dlg)
 	dlg.popup_centered(Vector2i(360, 200))
+
+
+## macOS のアプリケーションメニューの「About」は Godot 既定では
+## 何も起きないため、バージョン情報ダイアログへつなぐ
+func _setup_global_menu() -> void:
+	if OS.get_name() != "macOS":
+		return
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_GLOBAL_MENU):
+		return
+	var menu := NativeMenu.get_system_menu(NativeMenu.APPLICATION_MENU_ID)
+	if not menu.is_valid():
+		return
+	if NativeMenu.get_item_count(menu) > 0:
+		NativeMenu.set_item_callback(menu, 0, Callable(self, "_show_about"))

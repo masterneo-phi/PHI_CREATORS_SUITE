@@ -1,4 +1,4 @@
-extends HBoxContainer
+extends HSplitContainer
 ## ゲート制限エディタ (phi.ex)。FORMAT_SPEC §10。
 ## グループ = :G/:g + :I/:i/:M/:m + '.' 。許可 (:i/:m) は
 ## 禁止より前に置く必要がある。
@@ -42,6 +42,7 @@ func setup(project: WorldProject) -> void:
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(scroll)
+	split_offset = int(left.custom_minimum_size.x)
 	_detail = VBoxContainer.new()
 	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_detail)
