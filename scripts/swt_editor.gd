@@ -1,0 +1,316 @@
+extends HBoxContainer
+## スイッチエディタ (phi.swt)。FORMAT_SPEC §7。
+## 左の一覧で選び、右でプルダウン (条件・動作の種別) と
+## 欄入力で編集する。原文の行も常に表示し、手書き編集もできる。
+## コメント・空行などの行は保持専用として表示する。
+
+var _project: WorldProject
+var _swt: PhiSwt
+var _list: ItemList
+var _detail: VBoxContainer
+var _indices: Array[int] = []
+var _current := -1 ## records の番号
+
+
+func setup(project: WorldProject) -> void:
+	_project = project
+	_swt = project.swt
+	var left := VBoxContainer.new()
+	left.custom_minimum_size = Vector2(430, 0)
+	add_child(left)
+	if _swt == null:
+		var l := Label.new()
+		l.text = "phi.swt は無い world です"
+		left.add_child(l)
+		return
+	var btns := HBoxContainer.new()
+	var add_s := Button.new()
+	add_s.text = "新規 :S"
+	add_s.pressed.connect(func() -> void:
+		_swt.add_record({"kind": "S", "fields": {"sx": 0, "sy": 0,
+				"cc": 1, "cond": ["00", "0000"], "ax": 0, "ay": 0,
+				"dd": 16, "act": ["0", '"テキスト"']}, "modified": true})
+		_refresh_list())
+	var del := Button.new()
+	del.text = "削除"
+	del.pressed.connect(func() -> void:
+		if _current >= 0:
+			_swt.remove_record(_current)
+			_current = -1
+			_refresh_list())
+	btns.add_child(add_s)
+	btns.add_child(del)
+	left.add_child(btns)
+	_list = ItemList.new()
+	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_list.item_selected.connect(_on_selected)
+	left.add_child(_list)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(scroll)
+	_detail = VBoxContainer.new()
+	_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_detail)
+	_refresh_list()
+
+
+func _refresh_list() -> void:
+	_indices.clear()
+	_list.clear()
+	for i in _swt.records.size():
+		var rec := _swt.records[i]
+		_indices.append(i)
+		_list.add_item(_summary(i, rec))
+	if _current >= 0 and _current < _swt.records.size():
+		_list.select(_indices.find(_current))
+		_show_detail(_current)
+
+
+func _summary(i: int, rec: Dictionary) -> String:
+	var f: Dictionary = rec.get("fields", {})
+	match String(rec["kind"]):
+		"S":
+			return "(%03d,%03d) %s → (%03d,%03d) %s" % [
+				int(f.get("sx", 0)), int(f.get("sy", 0)),
+				HelpTexts.cc_name(int(f.get("cc", 0))),
+				int(f.get("ax", 0)), int(f.get("ay", 0)),
+				HelpTexts.dd_name(int(f.get("dd", 0)))]
+		"A":
+			return "メッセージ %04d → %04d" % [int(f.get("no", 0)),
+					int(f.get("next", 0))]
+		"M":
+			return "メニュー %04d" % int(f.get("no", 0))
+	var line := _swt.raw_lines.line_text(i)
+	return line.substr(0, 60) if line != "" else "(空行)"
+
+
+func _on_selected(idx: int) -> void:
+	_current = _indices[idx]
+	_show_detail(_current)
+
+
+func _clear_detail() -> void:
+	for child in _detail.get_children():
+		_detail.remove_child(child)
+		child.queue_free()
+
+
+func _spin_row(label: String, value: int, maxv: int,
+		on_change: Callable) -> SpinBox:
+	var h := HBoxContainer.new()
+	var l := Label.new()
+	l.text = label
+	l.custom_minimum_size = Vector2(150, 0)
+	h.add_child(l)
+	var s := SpinBox.new()
+	s.min_value = 0
+	s.max_value = maxv
+	s.value = value
+	s.value_changed.connect(func(v: float) -> void: on_change.call(int(v)))
+	h.add_child(s)
+	_detail.add_child(h)
+	return s
+
+
+func _line_row(label: String, value: String, on_change: Callable) -> LineEdit:
+	var h := HBoxContainer.new()
+	var l := Label.new()
+	l.text = label
+	l.custom_minimum_size = Vector2(150, 0)
+	h.add_child(l)
+	var e := LineEdit.new()
+	e.text = value
+	e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	e.text_changed.connect(func(t: String) -> void: on_change.call(t))
+	h.add_child(e)
+	_detail.add_child(h)
+	return e
+
+
+func _atoms_box(title: String, atoms: Array) -> VBoxContainer:
+	var l := Label.new()
+	l.text = title
+	_detail.add_child(l)
+	var box := VBoxContainer.new()
+	_detail.add_child(box)
+	for a in atoms:
+		var e := LineEdit.new()
+		e.text = String(a)
+		box.add_child(e)
+	return box
+
+
+func _read_atoms(box: VBoxContainer) -> Array:
+	var out: Array = []
+	for child in box.get_children():
+		out.append((child as LineEdit).text)
+	return out
+
+
+func _show_detail(rec_idx: int) -> void:
+	_clear_detail()
+	var rec := _swt.records[rec_idx]
+	var f: Dictionary = rec["fields"]
+	var kind := String(rec["kind"])
+	if kind == "S":
+		_show_s(rec, f)
+	elif kind == "A":
+		_show_a(rec, f)
+	elif kind == "M":
+		_show_m(rec, f)
+	else:
+		var l := Label.new()
+		l.text = "この行は保持専用です (コメント・空行など):\n"
+		l.text += _swt.raw_lines.line_text(rec_idx)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(l)
+		return
+	# 原文の行 (手書き編集)
+	var original_line := PhiSwt.build_line(rec)
+	if not bool(rec.get("modified", false)):
+		original_line = _swt.raw_lines.line_text(rec_idx)
+	_line_row("原文の行", original_line, func(t: String) -> void:
+		var parsed := PhiSwt._parse_line(t)
+		if String(parsed["kind"]) != "raw":
+			rec["fields"] = parsed["fields"]
+			rec["kind"] = parsed["kind"]
+			_swt.touch(rec)
+			_list.set_item_text(_indices.find(rec_idx),
+					_summary(rec_idx, rec)))
+
+
+func _request_pick(handler: Callable) -> void:
+	var m := get_tree().get_first_node_in_group("creators_main")
+	if m != null:
+		m.call("request_coord_pick", handler)
+
+
+func _pick_button(label: String, handler: Callable) -> void:
+	var b := Button.new()
+	b.text = label
+	b.pressed.connect(func() -> void: _request_pick(handler))
+	_detail.add_child(b)
+
+
+func _show_s(rec: Dictionary, f: Dictionary) -> void:
+	var sx_spin := _spin_row("設置 X", int(f["sx"]), 999, func(v: int) -> void:
+		f["sx"] = v
+		_commit(rec))
+	var sy_spin := _spin_row("設置 Y", int(f["sy"]), 999, func(v: int) -> void:
+		f["sy"] = v
+		_commit(rec))
+	_pick_button("設置位置をマップで指定", func(x: int, y: int) -> void:
+		sx_spin.value = x
+		sy_spin.value = y
+		f["sx"] = x
+		f["sy"] = y
+		_commit(rec))
+	var cc_box := _kind_option("条件", HelpTexts.CC_NAMES, int(f["cc"]),
+			func(v: int) -> void:
+		f["cc"] = v
+		_commit(rec))
+	_detail.add_child(cc_box)
+	var cond_box := _atoms_box("条件パラメータ", f.get("cond", []))
+	cond_box.child_exiting_tree.connect(func() -> void: pass)
+	var apply_cond := Button.new()
+	apply_cond.text = "条件パラメータを反映"
+	apply_cond.pressed.connect(func() -> void:
+		f["cond"] = _read_atoms(cond_box)
+		_commit(rec))
+	_detail.add_child(apply_cond)
+	var ax_spin := _spin_row("動作 X", int(f["ax"]), 999, func(v: int) -> void:
+		f["ax"] = v
+		_commit(rec))
+	var ay_spin := _spin_row("動作 Y", int(f["ay"]), 999, func(v: int) -> void:
+		f["ay"] = v
+		_commit(rec))
+	_pick_button("動作位置をマップで指定", func(x: int, y: int) -> void:
+		ax_spin.value = x
+		ay_spin.value = y
+		f["ax"] = x
+		f["ay"] = y
+		_commit(rec))
+	var dd_box := _kind_option("動作", HelpTexts.DD_NAMES, int(f["dd"]),
+			func(v: int) -> void:
+		f["dd"] = v
+		_commit(rec))
+	_detail.add_child(dd_box)
+	var act_box := _atoms_box("動作パラメータ", f.get("act", []))
+	var apply_act := Button.new()
+	apply_act.text = "動作パラメータを反映"
+	apply_act.pressed.connect(func() -> void:
+		f["act"] = _read_atoms(act_box)
+		_commit(rec))
+	_detail.add_child(apply_act)
+	if f.has("tail_raw"):
+		_line_row("末尾 (原文の残り)", String(f["tail_raw"]),
+				func(t: String) -> void:
+			f["tail_raw"] = t
+			_commit(rec))
+
+
+func _show_a(rec: Dictionary, f: Dictionary) -> void:
+	_spin_row("メッセージ番号", int(f["no"]), 9999, func(v: int) -> void:
+		f["no"] = v
+		_commit(rec))
+	_spin_row("次の番号 (0=終わり)", int(f["next"]), 9999,
+			func(v: int) -> void:
+		f["next"] = v
+		_commit(rec))
+	_spin_row("待ち", int(f["wait"]), 9999, func(v: int) -> void:
+		f["wait"] = v
+		_commit(rec))
+	_line_row("末尾 (テキスト等)", String(f.get("text", "")),
+			func(t: String) -> void:
+		f["text"] = t
+		_commit(rec))
+
+
+func _show_m(rec: Dictionary, f: Dictionary) -> void:
+	_spin_row("メニュー番号", int(f["no"]), 9999, func(v: int) -> void:
+		f["no"] = v
+		_commit(rec))
+	_line_row("パターン", String(f.get("pattern", "")),
+			func(t: String) -> void:
+		f["pattern"] = t
+		_commit(rec))
+	_line_row("キャプション", String(f.get("caption", "")),
+			func(t: String) -> void:
+		f["caption"] = t
+		_commit(rec))
+	_line_row("動作", String(f.get("action", "")),
+			func(t: String) -> void:
+		f["action"] = t
+		_commit(rec))
+
+
+func _kind_option(label: String, names: Dictionary, current: int,
+		on_change: Callable) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	var l := Label.new()
+	l.text = label
+	l.custom_minimum_size = Vector2(150, 0)
+	h.add_child(l)
+	var ob := OptionButton.new()
+	var keys := names.keys()
+	keys.sort()
+	if not keys.has(current):
+		keys.append(current)
+		keys.sort()
+	for k in keys:
+		ob.add_item("%02d %s" % [int(k), String(names.get(k, "不明"))])
+		ob.set_item_metadata(ob.item_count - 1, int(k))
+	ob.select(keys.find(current))
+	ob.item_selected.connect(func(idx: int) -> void:
+		on_change.call(int(ob.get_item_metadata(idx))))
+	h.add_child(ob)
+	return h
+
+
+func _commit(rec: Dictionary) -> void:
+	_swt.touch(rec)
+	var idx := _swt.records.find(rec)
+	if idx >= 0:
+		var li := _indices.find(idx)
+		if li >= 0:
+			_list.set_item_text(li, _summary(idx, rec))
