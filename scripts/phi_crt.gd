@@ -52,6 +52,46 @@ func add_record(rec: Dictionary) -> int:
 	return records.size() - 1
 
 
+## レシピのブロック一覧 (第5段: 1ブロック = 1クリエイト設定)。
+## 各ブロックは "." (term) で終わる。末尾に term の無い残りも1ブロック。
+## 戻り値: [{"start": int, "end": int}] (end は term を含む最終 index)
+func blocks() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var start := 0
+	for i in records.size():
+		if String(records[i]["kind"]) == "term":
+			out.append({"start": start, "end": i})
+			start = i + 1
+	if start < records.size():
+		# 末尾の空行だけの残りはレシピではない
+		var has_recipe := false
+		for i in range(start, records.size()):
+			if String(records[i]["kind"]) in ["L", "P", "F", "S"]:
+				has_recipe = true
+				break
+		if has_recipe:
+			out.append({"start": start, "end": records.size() - 1})
+	return out
+
+
+## ブロックの見出し (一覧表示用): :L の値と生成物の名前。
+func block_summary(b: Dictionary) -> String:
+	var lv := ""
+	var item := ""
+	for i in range(int(b["start"]), int(b["end"]) + 1):
+		var kind := String(records[i]["kind"])
+		var rest := String(records[i].get("fields", {}).get("rest", ""))
+		if kind == "L" and lv == "":
+			lv = rest.strip_edges()
+		elif kind == "P" and item == "":
+			item = rest.strip_edges().substr(0, 24)
+		elif kind == "F" and item == "":
+			item = "(失敗時) " + rest.strip_edges().substr(0, 20)
+	if item == "":
+		item = "(生成物なし)"
+	return ("Lv%s " % lv if lv != "" else "") + item
+
+
 func remove_record(idx: int) -> void:
 	raw_lines.lines.remove_at(idx)
 	raw_lines.eols.remove_at(idx)

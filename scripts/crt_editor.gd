@@ -1,15 +1,24 @@
 extends HBoxContainer
 ## クリエイトエディタ (phi.crt)。FORMAT_SPEC §9。
+## 第5段: エネミーエディタと同じく「1ブロック = 1クリエイト設定」で扱う。
 ## レシピ = [:L] :P/:F :S :S の厳密な並びを崩さないよう、
-## 行リスト + 原文データ編集で扱う。
+## ブロック内の各行は原文データ (rest) を編集する。
 
 var _crt: PhiCrt
 var _list: ItemList
 var _detail: VBoxContainer
+var _blocks: Array[Dictionary] = []
 
 const KIND_LABELS := {
 	"L": "必要レベル", "P": "成功時の生成物", "F": "失敗時の生成物",
 	"S": "素材",
+}
+
+const KIND_HELP := {
+	"L": "このレベル以下の PC は作れません。2倍のレベルで成功率100%。",
+	"P": "アイテムデータ (名前 type wp fn op×4)。ワイルドカードは使えません。",
+	"F": "アイテムデータ (名前 type wp fn op×4)。ワイルドカードは使えません。",
+	"S": "素材のアイテムデータ。ワイルドカード (* や -- や 60^ など) が使えます。",
 }
 
 
@@ -45,17 +54,10 @@ func setup(project: WorldProject) -> void:
 
 
 func _refresh() -> void:
+	_blocks = _crt.blocks()
 	_list.clear()
-	for i in _crt.records.size():
-		var rec := _crt.records[i]
-		var kind := String(rec["kind"])
-		if kind in KIND_LABELS:
-			_list.add_item(":%s %s" % [kind,
-					String(rec["fields"]["rest"]).substr(0, 48)])
-		elif kind == "term":
-			_list.add_item(".")
-		else:
-			_list.add_item(_crt.raw_lines.line_text(i))
+	for b in _blocks:
+		_list.add_item(_crt.block_summary(b))
 
 
 func _add_recipe() -> void:
@@ -70,36 +72,64 @@ func _add_recipe() -> void:
 					"modified": true}
 		_crt.add_record(rec)
 	_refresh()
+	_show(_blocks.size() - 1)
 
 
-func _show(idx: int) -> void:
+func _delete_block(bi: int) -> void:
+	if bi < 0 or bi >= _blocks.size():
+		return
+	var b := _blocks[bi]
+	for i in range(int(b["end"]), int(b["start"]) - 1, -1):
+		_crt.remove_record(i)
 	for child in _detail.get_children():
 		_detail.remove_child(child)
 		child.queue_free()
-	var rec := _crt.records[idx]
-	var kind := String(rec["kind"])
-	if not (kind in KIND_LABELS):
-		var l := Label.new()
-		l.text = "この行は原文のまま保持されます"
-		_detail.add_child(l)
+	_refresh()
+
+
+func _show(bi: int) -> void:
+	for child in _detail.get_children():
+		_detail.remove_child(child)
+		child.queue_free()
+	if bi < 0 or bi >= _blocks.size():
 		return
+	var b := _blocks[bi]
 	var title := Label.new()
-	title.text = String(KIND_LABELS[kind])
+	title.text = "レシピ: " + _crt.block_summary(b)
+	title.add_theme_color_override("font_color", AppTheme.GOLD)
 	_detail.add_child(title)
-	var e := LineEdit.new()
-	e.text = String(rec["fields"]["rest"])
-	e.text_changed.connect(func(t: String) -> void:
-		rec["fields"]["rest"] = t
-		_crt.touch(rec)
-		_list.set_item_text(idx, ":%s %s" % [kind, t.substr(0, 48)]))
-	_detail.add_child(e)
-	var help := Label.new()
-	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	match kind:
-		"L":
-			help.text = "このレベル以下の PC は作れません。2倍のレベルで成功率100%。"
-		"P", "F":
-			help.text = "アイテムデータ (名前 type wp fn op×4)。ワイルドカードは使えません。"
-		"S":
-			help.text = "素材のアイテムデータ。ワイルドカード (* や -- や 60^ など) が使えます。"
-	_detail.add_child(help)
+	for i in range(int(b["start"]), int(b["end"]) + 1):
+		var rec := _crt.records[i]
+		var kind := String(rec["kind"])
+		if kind == "term":
+			var tl := Label.new()
+			tl.text = ". (レシピの終わり)"
+			tl.modulate = Color(0.7, 0.7, 0.7)
+			_detail.add_child(tl)
+			continue
+		if not (kind in KIND_LABELS):
+			var rl := Label.new()
+			rl.text = _crt.raw_lines.line_text(i) + " (原文のまま保持)"
+			_detail.add_child(rl)
+			continue
+		var head := Label.new()
+		head.text = ":%s %s" % [kind, String(KIND_LABELS[kind])]
+		_detail.add_child(head)
+		var e := LineEdit.new()
+		e.text = String(rec["fields"]["rest"])
+		var rec_ref := rec
+		e.text_changed.connect(func(t: String) -> void:
+			rec_ref["fields"]["rest"] = t
+			_crt.touch(rec_ref)
+			_blocks = _crt.blocks()
+			_list.set_item_text(bi, _crt.block_summary(_blocks[bi])))
+		_detail.add_child(e)
+		var help := Label.new()
+		help.text = String(KIND_HELP[kind])
+		help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		help.modulate = Color(0.75, 0.75, 0.75)
+		_detail.add_child(help)
+	var del := Button.new()
+	del.text = "このレシピを削除"
+	del.pressed.connect(func() -> void: _delete_block(bi))
+	_detail.add_child(del)

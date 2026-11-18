@@ -29,7 +29,8 @@ func setup(project: WorldProject) -> void:
 func _section(title: String) -> void:
 	var l := Label.new()
 	l.text = "■ " + title
-	l.add_theme_font_size_override("font_size", 18)
+	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_color_override("font_color", AppTheme.GOLD)
 	_box.add_child(l)
 
 
@@ -229,6 +230,9 @@ func _o_flag_row(code: String, label: String, help: String) -> void:
 
 
 # ---------------------------------------------------------------- :U
+var _u_help_label: Label
+
+
 func _u_codes() -> String:
 	var r := _td.find_record("U")
 	if r.is_empty():
@@ -246,18 +250,30 @@ func _set_u_codes(codes: String) -> void:
 
 func _build_u_options() -> void:
 	_section("雑多オプション (:U)")
+	# フラグ類は横に並べる (第5段: 縦長にしない)。解説は下の1行に出す
+	var grid := GridContainer.new()
+	grid.columns = 3
+	_box.add_child(grid)
+	_u_help_label = Label.new()
+	_u_help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_u_help_label.modulate = Color(0.75, 0.75, 0.75)
 	for def in HelpTexts.U_DEFS:
 		var key := String(def["key"])
 		var cb := CheckBox.new()
 		cb.text = String(def["label"])
+		cb.tooltip_text = String(def["help"])
 		cb.button_pressed = _u_flag_state(def)
 		cb.toggled.connect(func(on: bool) -> void:
 			var tokens := UOptions.tokenize(_u_codes())
 			tokens = UOptions.set_flag(tokens, String(def["on"]),
 					String(def.get("off", "")), on)
 			_set_u_codes(UOptions.join(tokens)))
+		var help_text := String(def["help"])
+		cb.mouse_entered.connect(func() -> void:
+			_u_help_label.text = "%s — %s" % [String(def["label"]), help_text])
 		_u_controls[key] = cb
-		_row("", cb, String(def["help"]))
+		grid.add_child(cb)
+	_box.add_child(_u_help_label)
 	for def in HelpTexts.U_INT_DEFS:
 		var prefix := String(def["prefix"])
 		var cur := UOptions.get_int(UOptions.tokenize(_u_codes()), prefix)

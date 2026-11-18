@@ -15,13 +15,13 @@ const MapEditor := preload("res://scripts/map_editor.gd")
 const EDITORS: Array[Dictionary] = [
 	{"name": "世界設定 (phi.td)", "scene": "td"},
 	{"name": "アナウンス (phi.bb / phi.inf)", "scene": "announce"},
-	{"name": "スイッチ (phi.swt)", "scene": "swt"},
 	{"name": "エネミー (phi.ed)", "scene": "ed"},
 	{"name": "オブジェクト (phi.od)", "scene": "od"},
-	{"name": "ゲート制限 (phi.ex)", "scene": "ex"},
 	{"name": "クリエイト (phi.crt)", "scene": "crt"},
-	{"name": "マスター権限 (phi.ad)", "scene": "ad"},
 	{"name": "マップ (phi.dd / phi.fd)", "scene": "map"},
+	{"name": "スイッチ (phi.swt)", "scene": "swt"},
+	{"name": "ゲート制限 (phi.ex)", "scene": "ex"},
+	{"name": "マスター権限 (phi.ad)", "scene": "ad"},
 ]
 
 var _project: WorldProject
@@ -35,15 +35,21 @@ var _pick_handler: Callable
 var _pick_return_idx := -1
 var _pick_switching := false
 var _current_idx := 0
+var _autosave_check: CheckBox
+var _autosave_timer: Timer
 
 
 func _ready() -> void:
 	add_to_group("creators_main")
+	theme = AppTheme.build()
 	var root := VBoxContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(root)
+	var bar_panel := PanelContainer.new()
+	bar_panel.add_theme_stylebox_override("panel", AppTheme.bar_style())
+	root.add_child(bar_panel)
 	var bar := HBoxContainer.new()
-	root.add_child(bar)
+	bar_panel.add_child(bar)
 	var open_btn := Button.new()
 	open_btn.text = "既存の world を開く"
 	open_btn.pressed.connect(_on_open_pressed)
@@ -57,16 +63,34 @@ func _ready() -> void:
 	_save_btn.disabled = true
 	_save_btn.pressed.connect(_on_save_pressed)
 	bar.add_child(_save_btn)
+	_autosave_check = CheckBox.new()
+	_autosave_check.text = "自動保存 (60秒ごと)"
+	_autosave_check.toggled.connect(_on_autosave_toggled)
+	bar.add_child(_autosave_check)
+	var about_btn := Button.new()
+	about_btn.text = "バージョン情報"
+	about_btn.pressed.connect(_show_about)
+	bar.add_child(about_btn)
 	_path_label = Label.new()
 	_path_label.text = "(未選択)"
+	_path_label.add_theme_color_override("font_color", Color.WHITE)
 	bar.add_child(_path_label)
 	_status_label = Label.new()
+	_status_label.add_theme_color_override("font_color",
+			Color(1.0, 0.95, 0.75))
 	bar.add_child(_status_label)
+	_autosave_timer = Timer.new()
+	_autosave_timer.wait_time = 60.0
+	_autosave_timer.timeout.connect(_on_autosave_tick)
+	add_child(_autosave_timer)
+	var cfg := ConfigFile.new()
+	cfg.load("user://creators.cfg")
+	_autosave_check.button_pressed = bool(cfg.get_value("save", "auto", false))
 	var split := HSplitContainer.new()
 	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(split)
 	_editor_list = ItemList.new()
-	_editor_list.custom_minimum_size = Vector2(230, 0)
+	_editor_list.custom_minimum_size = Vector2(260, 0)
 	for e in EDITORS:
 		_editor_list.add_item(String(e["name"]))
 	_editor_list.item_selected.connect(_on_editor_selected)
@@ -211,7 +235,7 @@ func request_coord_pick(handler: Callable) -> void:
 		return
 	_pick_handler = handler
 	_pick_return_idx = _current_idx
-	var map_idx := EDITORS.size() - 1
+	var map_idx := _editor_index("map")
 	_pick_switching = true
 	_editor_list.select(map_idx)
 	_on_editor_selected(map_idx)
@@ -250,3 +274,39 @@ func _on_save_pressed() -> void:
 		_status_label.text = "変更はありません"
 	else:
 		_status_label.text = "保存しました: " + ", ".join(saved)
+
+
+func _editor_index(scene_key: String) -> int:
+	for i in EDITORS.size():
+		if String(EDITORS[i]["scene"]) == scene_key:
+			return i
+	return 0
+
+
+func _on_autosave_toggled(on: bool) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load("user://creators.cfg")
+	cfg.set_value("save", "auto", on)
+	cfg.save("user://creators.cfg")
+	if on:
+		_autosave_timer.start()
+	else:
+		_autosave_timer.stop()
+
+
+func _on_autosave_tick() -> void:
+	if _project == null:
+		return
+	var saved := _project.save_all()
+	if not saved.is_empty():
+		var t := Time.get_time_dict_from_system()
+		_status_label.text = "自動保存しました (%02d:%02d): %s" % [
+			int(t["hour"]), int(t["minute"]), ", ".join(saved)]
+
+
+func _show_about() -> void:
+	var dlg := AcceptDialog.new()
+	dlg.title = "バージョン情報"
+	dlg.dialog_text = CreatorsVersion.about_text()
+	add_child(dlg)
+	dlg.popup_centered(Vector2i(360, 200))

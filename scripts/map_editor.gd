@@ -8,11 +8,15 @@ signal pick_cancelled
 
 var _project: WorldProject
 var _canvas: MapCanvas
+var _hsb: HScrollBar
+var _vsb: VScrollBar
+var _syncing_bars := false
 var _status: Label
 var _palette_grid: GridContainer
 var _area_list: ItemList
 var _roof_check: CheckBox
 var _e_detail: VBoxContainer
+var _e_flag_boxes: Array[CheckBox] = []
 var _obj_detail: VBoxContainer
 var _cell_label: Label
 var _sheet_ob: OptionButton
@@ -63,10 +67,13 @@ func _build_create_ui() -> void:
 
 
 func _build_editor_ui() -> void:
-	# 左: 道具とパレット
+	# 左: 道具とパレット (縦に長くなるのでスクロール可能にする)
+	var left_scroll := ScrollContainer.new()
+	left_scroll.custom_minimum_size = Vector2(250, 0)
+	add_child(left_scroll)
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(215, 0)
-	add_child(left)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_scroll.add_child(left)
 	var chip_btn := Button.new()
 	chip_btn.text = "チップフォルダを選ぶ"
 	chip_btn.pressed.connect(_on_chip_dir_pressed)
@@ -90,12 +97,13 @@ func _build_editor_ui() -> void:
 		_canvas.pen_roof = on)
 	left.add_child(_roof_check)
 	var zoom_ob := OptionButton.new()
-	for z in [8, 16, 24, 32]:
+	for z in [8, 12, 16, 24, 32, 48]:
 		zoom_ob.add_item("%d px" % z)
-	zoom_ob.select(1)
+	zoom_ob.select(3)
 	zoom_ob.item_selected.connect(func(i: int) -> void:
-		_canvas.cell_px = [8, 16, 24, 32][i]
-		_canvas.queue_redraw())
+		_canvas.cell_px = [8, 12, 16, 24, 32, 48][i]
+		_canvas.queue_redraw()
+		_update_scrollbars())
 	left.add_child(zoom_ob)
 	var area_check := CheckBox.new()
 	area_check.text = "エリアを表示"
@@ -128,7 +136,7 @@ func _build_editor_ui() -> void:
 	pl.text = "■ 地形パレット (右クリックで吸い取り)"
 	left.add_child(pl)
 	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 190)
 	left.add_child(scroll)
 	_palette_grid = GridContainer.new()
 	_palette_grid.columns = 3
@@ -145,12 +153,25 @@ func _build_editor_ui() -> void:
 	add_area.text = "エリア定義 (:E) を追加"
 	add_area.pressed.connect(_add_area)
 	left.add_child(add_area)
+	var el := Label.new()
+	el.text = "■ エリア定義 (:E)"
+	el.add_theme_color_override("font_color", AppTheme.GOLD)
+	left.add_child(el)
+	_e_detail = VBoxContainer.new()
+	left.add_child(_e_detail)
 	_refresh_areas()
-	# 中央: キャンバス
+	# 中央: キャンバス + スクロールバー
+	var mid := VBoxContainer.new()
+	mid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(mid)
+	var row1 := HBoxContainer.new()
+	row1.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	mid.add_child(row1)
 	_canvas = MapCanvas.new()
 	_canvas.dd = _project.dd
 	_canvas.fd = _project.fd
 	_canvas.od = _project.od
+	_canvas.cell_px = 24
 	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_canvas.hover_changed.connect(_on_hover)
@@ -158,8 +179,24 @@ func _build_editor_ui() -> void:
 	_canvas.painted.connect(_refresh_status)
 	_canvas.coord_picked.connect(_on_coord_picked)
 	_canvas.pick_cancelled.connect(_on_pick_cancelled)
-	add_child(_canvas)
-	# 右: 情報と詳細
+	_canvas.offset_changed.connect(_sync_scrollbars)
+	_canvas.resized.connect(_update_scrollbars)
+	row1.add_child(_canvas)
+	_vsb = VScrollBar.new()
+	_vsb.custom_minimum_size = Vector2(16, 0)
+	_vsb.value_changed.connect(_on_vsb)
+	row1.add_child(_vsb)
+	var row2 := HBoxContainer.new()
+	mid.add_child(row2)
+	_hsb = HScrollBar.new()
+	_hsb.custom_minimum_size = Vector2(0, 16)
+	_hsb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hsb.value_changed.connect(_on_hsb)
+	row2.add_child(_hsb)
+	var corner := Control.new()
+	corner.custom_minimum_size = Vector2(16, 16)
+	row2.add_child(corner)
+	# 右: 情報とオブジェクト詳細
 	var right := VBoxContainer.new()
 	right.custom_minimum_size = Vector2(290, 0)
 	add_child(right)
@@ -169,13 +206,9 @@ func _build_editor_ui() -> void:
 	_cell_label = Label.new()
 	_cell_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(_cell_label)
-	var el := Label.new()
-	el.text = "■ エリア定義 (:E)"
-	right.add_child(el)
-	_e_detail = VBoxContainer.new()
-	right.add_child(_e_detail)
 	var ol := Label.new()
 	ol.text = "■ オブジェクト"
+	ol.add_theme_color_override("font_color", AppTheme.GOLD)
 	right.add_child(ol)
 	_obj_detail = VBoxContainer.new()
 	right.add_child(_obj_detail)
@@ -252,6 +285,10 @@ func _build_palette() -> void:
 		b.text = String(PhiDd.CODE_TO_PAIR.get(code, "  "))
 		b.tooltip_text = String(PhiDd.CODE_TO_NAME.get(code, ""))
 		b.toggle_mode = true
+		var fc: Color = MapCanvas.FALLBACK_COLORS.get(code,
+				Color(0.9, 0.9, 0.9))
+		b.add_theme_color_override("font_color", fc.lightened(0.55))
+		b.add_theme_color_override("font_hover_color", fc.lightened(0.7))
 		var c := code
 		b.pressed.connect(func() -> void:
 			_canvas.pen_code = c
@@ -276,6 +313,8 @@ func _refresh_areas() -> void:
 func _on_area_selected(idx: int) -> void:
 	var code := int(_area_list.get_item_metadata(idx))
 	_canvas.pen_area = code
+	_canvas.highlight_area = code
+	_canvas.queue_redraw()
 	_show_e(code)
 
 
@@ -318,24 +357,28 @@ func _show_e(code: int) -> void:
 		f["floor"] = t
 		fd.touch(rec))
 	var flags := String(f["flags"])
+	_e_flag_boxes.clear()
+	var flag_grid := GridContainer.new()
+	flag_grid.columns = 2
+	_e_detail.add_child(flag_grid)
 	for ch in PhiFd.FLAG_NAMES.keys():
 		var c := CheckBox.new()
 		c.text = "%s: %s" % [ch, String(PhiFd.FLAG_NAMES[ch])]
+		c.set_meta("flag_char", ch)
 		c.button_pressed = flags.contains(ch)
 		c.toggled.connect(func(_on: bool) -> void:
 			var s := ""
-			for k in PhiFd.FLAG_NAMES.keys():
-				for child in _e_detail.get_children():
-					if child is CheckBox and child.text.begins_with(k + ":") \
-							and (child as CheckBox).button_pressed:
-						s += k
+			for b in _e_flag_boxes:
+				if b.button_pressed:
+					s += String(b.get_meta("flag_char"))
 			# Call 先 (小文字) は保持する
 			for ch2 in String(f["flags"]):
 				if ch2 >= "a" and ch2 <= "z":
 					s += ch2
 			f["flags"] = s
 			fd.touch(rec))
-		_e_detail.add_child(c)
+		_e_flag_boxes.append(c)
+		flag_grid.add_child(c)
 	var mapset := ""
 	for r in fd.records:
 		if String(r["kind"]) == "S" and String(r["fields"]["rest"]).lstrip(" ") \
@@ -362,6 +405,46 @@ func _e_field(label: String, value: String, on_change: Callable) -> void:
 
 func _on_hover(x: int, y: int) -> void:
 	_refresh_status(x, y)
+
+
+## --- スクロールバー ---
+
+func _update_scrollbars() -> void:
+	if _canvas == null or _project == null or _project.dd == null:
+		return
+	_syncing_bars = true
+	var cols := int(_canvas.size.x) / maxi(1, _canvas.cell_px)
+	var rows := int(_canvas.size.y) / maxi(1, _canvas.cell_px)
+	_hsb.max_value = _project.dd.size_x
+	_hsb.page = maxi(1, cols)
+	_hsb.value = _canvas.offset.x
+	_vsb.max_value = _project.dd.size_y
+	_vsb.page = maxi(1, rows)
+	_vsb.value = _canvas.offset.y
+	_syncing_bars = false
+
+
+func _sync_scrollbars() -> void:
+	if _syncing_bars or _canvas == null:
+		return
+	_syncing_bars = true
+	_hsb.value = _canvas.offset.x
+	_vsb.value = _canvas.offset.y
+	_syncing_bars = false
+
+
+func _on_hsb(v: float) -> void:
+	if _syncing_bars or _canvas == null:
+		return
+	_canvas.offset.x = v
+	_canvas.queue_redraw()
+
+
+func _on_vsb(v: float) -> void:
+	if _syncing_bars or _canvas == null:
+		return
+	_canvas.offset.y = v
+	_canvas.queue_redraw()
 
 
 func _refresh_status(x: int = -1, y: int = -1) -> void:

@@ -8,6 +8,7 @@ signal object_picked(rec_idx: int)
 signal painted
 signal coord_picked(x: int, y: int)
 signal pick_cancelled
+signal offset_changed
 
 var dd: PhiDd
 var fd: PhiFd
@@ -24,6 +25,8 @@ var show_switches := true
 var spawn_points: Array = []
 var switch_points: Array = []
 var switch_targets: Array = []
+## 選択中エリアの強調表示 (-1 = なし)
+var highlight_area := -1
 var mode := "terrain" ## terrain / fill / surface / area / object
 var pen_code := 0xFC
 var pen_roof := false
@@ -105,6 +108,10 @@ func _draw() -> void:
 					draw_string(font, rect.position + Vector2(2, 13),
 							"%02x" % ac, HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
 							Color(1, 1, 1, 0.9))
+			if highlight_area >= 0 and fd != null \
+					and fd.code_at(cx, cy) == highlight_area:
+				draw_rect(rect, Color(1.0, 0.95, 0.35, 0.38))
+				draw_rect(rect, Color(1.0, 0.9, 0.2, 0.9), false, 1.5)
 			draw_rect(rect, Color(0, 0, 0, 0.18), false, 1.0)
 	if show_objects and od != null:
 		for i in od.records.size():
@@ -223,9 +230,11 @@ func _gui_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
 			offset.y = maxf(0, offset.y - 3)
+			offset_changed.emit()
 			queue_redraw()
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
 			offset.y = minf(dd.size_y - 1, offset.y + 3)
+			offset_changed.emit()
 			queue_redraw()
 		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
 			_panning = mb.pressed
@@ -247,6 +256,7 @@ func _gui_input(event: InputEvent) -> void:
 			offset = _offset_start - (mm.position - _pan_start) / cell_px
 			offset.x = clampf(offset.x, 0, dd.size_x - 1)
 			offset.y = clampf(offset.y, 0, dd.size_y - 1)
+			offset_changed.emit()
 			queue_redraw()
 			return
 		var c := cell_at_pos(mm.position)
