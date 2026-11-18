@@ -48,6 +48,9 @@ var _update_retried := false
 var _update_info: Dictionary = {}
 var _update_overlay: Control = null
 var _update_label: Label = null
+var _launch_overlay: Control = null
+var _launch_client_edit: LineEdit
+var _launch_server_edit: LineEdit
 
 
 func _ready() -> void:
@@ -90,6 +93,18 @@ func _ready() -> void:
 	update_btn.text = "更新を確認"
 	update_btn.pressed.connect(func() -> void: _check_update(true))
 	bar.add_child(update_btn)
+	var dm_btn := Button.new()
+	dm_btn.text = "DM 起動"
+	dm_btn.pressed.connect(_on_launch_server)
+	bar.add_child(dm_btn)
+	var client_btn := Button.new()
+	client_btn.text = "クライアント起動"
+	client_btn.pressed.connect(_on_launch_client)
+	bar.add_child(client_btn)
+	var launch_cfg_btn := Button.new()
+	launch_cfg_btn.text = "起動設定"
+	launch_cfg_btn.pressed.connect(_show_launch_settings)
+	bar.add_child(launch_cfg_btn)
 	_path_label = Label.new()
 	_path_label.text = "(未選択)"
 	_path_label.clip_text = true
@@ -298,6 +313,138 @@ func _on_save_pressed() -> void:
 		_status_label.text = "変更はありません"
 	else:
 		_status_label.text = "保存しました: " + ", ".join(saved)
+
+
+## 起動の場所 (クライアント/サーバー) は creators.cfg に持つ
+func _launch_path(key: String) -> String:
+	var cfg := ConfigFile.new()
+	cfg.load("user://creators.cfg")
+	return String(cfg.get_value("launch", key, ""))
+
+
+func _save_launch_paths() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load("user://creators.cfg")
+	cfg.set_value("launch", "client", _launch_client_edit.text.strip_edges())
+	cfg.set_value("launch", "server", _launch_server_edit.text.strip_edges())
+	cfg.save("user://creators.cfg")
+
+
+## サーバは world フォルダをカレントにして起動する
+## (phi_dm は phi.td 等を相対パスで読むため)
+static func server_command(server_path: String, world_dir: String,
+		os_name: String) -> Array:
+	if os_name == "Windows":
+		return ["cmd.exe", ["/c", "cd /d \"%s\" && \"%s\"" % [
+				world_dir, server_path]]]
+	return ["/bin/sh", ["-c", "cd \"$1\" && exec \"$2\"", "sh",
+			world_dir, server_path]]
+
+
+static func client_command(client_path: String, os_name: String) -> Array:
+	if os_name == "macOS" and client_path.ends_with(".app"):
+		return ["/usr/bin/open", [client_path]]
+	return [client_path, []]
+
+
+## DM 起動: 編集中の world を保存してから、
+## サーバーをその world フォルダで起動する
+func _on_launch_server() -> void:
+	if _project == null:
+		_status_label.text = "先に world を開いてください"
+		return
+	var server := _launch_path("server")
+	if server.is_empty():
+		_status_label.text = "サーバーの場所を設定してください"
+		_show_launch_settings()
+		return
+	_project.save_all()
+	var scmd := server_command(server, _project.dir, OS.get_name())
+	var spid := OS.create_process(String(scmd[0]), scmd[1])
+	if spid < 0:
+		_status_label.text = "サーバーを起動できませんでした: " + server
+		return
+	_status_label.text = "DM を起動しました (PID %d)" % spid
+
+
+## クライアント起動: 設定されたクライアントを起動する
+func _on_launch_client() -> void:
+	var client := _launch_path("client")
+	if client.is_empty():
+		_status_label.text = "クライアントの場所を設定してください"
+		_show_launch_settings()
+		return
+	var ccmd := client_command(client, OS.get_name())
+	var cpid := OS.create_process(String(ccmd[0]), ccmd[1])
+	if cpid < 0:
+		_status_label.text = "クライアントを起動できませんでした: " + client
+		return
+	_status_label.text = "クライアントを起動しました (PID %d)" % cpid
+
+
+func _show_launch_settings() -> void:
+	if _launch_overlay == null:
+		_launch_overlay = _make_overlay("起動設定")
+		var box := _launch_overlay.get_meta("box") as VBoxContainer
+		var note := Label.new()
+		note.text = "「DM 起動」「クライアント起動」で使うサーバー (phi_dm 等) とクライアント (NeoPHI 等) の場所です。\nサーバーは編集中の world フォルダで起動します。"
+		box.add_child(note)
+		_launch_client_edit = _launch_path_row(box, "クライアント")
+		_launch_server_edit = _launch_path_row(box, "サーバー")
+		var help := Label.new()
+		help.text = "Mac のクライアントは .app のパス (例: /Applications/NeoPHI.app) でも構いません。"
+		help.modulate = Color(0.75, 0.75, 0.75)
+		box.add_child(help)
+		var row := HBoxContainer.new()
+		var save_b := Button.new()
+		save_b.text = "保存"
+		save_b.pressed.connect(func() -> void:
+			_save_launch_paths()
+			_launch_overlay.hide()
+			_status_label.text = "起動設定を保存しました")
+		row.add_child(save_b)
+		var cancel_b := Button.new()
+		cancel_b.text = "キャンセル"
+		cancel_b.pressed.connect(func() -> void: _launch_overlay.hide())
+		row.add_child(cancel_b)
+		box.add_child(row)
+		add_child(_launch_overlay)
+	_launch_client_edit.text = _launch_path("client")
+	_launch_server_edit.text = _launch_path("server")
+	_center_overlay(_launch_overlay)
+	_launch_overlay.show()
+
+
+func _launch_path_row(parent: Container, label_text: String) -> LineEdit:
+	var row := HBoxContainer.new()
+	var l := Label.new()
+	l.text = label_text
+	l.custom_minimum_size = Vector2(110, 0)
+	row.add_child(l)
+	var e := LineEdit.new()
+	e.custom_minimum_size = Vector2(430, 0)
+	e.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(e)
+	var b := Button.new()
+	b.text = "参照…"
+	b.pressed.connect(func() -> void: _pick_launch_file(e))
+	row.add_child(b)
+	parent.add_child(row)
+	return e
+
+
+func _pick_launch_file(target: LineEdit) -> void:
+	var dlg := FileDialog.new()
+	dlg.transparent = true # Mac で黒く潰れないように
+	dlg.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dlg.access = FileDialog.ACCESS_FILESYSTEM
+	dlg.title = "実行ファイルを選択"
+	if not target.text.is_empty():
+		dlg.current_path = target.text
+	dlg.file_selected.connect(func(path: String) -> void:
+		target.text = path)
+	add_child(dlg)
+	dlg.popup_centered(Vector2i(900, 600))
 
 
 func _editor_index(scene_key: String) -> int:

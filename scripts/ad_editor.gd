@@ -21,6 +21,15 @@ func setup(project: WorldProject) -> void:
 		var l := Label.new()
 		l.text = "phi.ad は無い world です"
 		left.add_child(l)
+		var cb := Button.new()
+		cb.text = "phi.ad を新規作成"
+		cb.pressed.connect(func() -> void:
+			if project.create_file("ad"):
+				for child in get_children():
+					remove_child(child)
+					child.queue_free()
+				setup(project))
+		left.add_child(cb)
 		return
 	var btns := HBoxContainer.new()
 	var add_btn := Button.new()

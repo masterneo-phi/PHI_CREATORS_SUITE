@@ -57,6 +57,15 @@ func setup(project: WorldProject) -> void:
 		var l := Label.new()
 		l.text = "phi.ed は無い world です"
 		left.add_child(l)
+		var cb := Button.new()
+		cb.text = "phi.ed を新規作成"
+		cb.pressed.connect(func() -> void:
+			if project.create_file("ed"):
+				for child in get_children():
+					remove_child(child)
+					child.queue_free()
+				setup(project))
+		left.add_child(cb)
 		return
 	var btns := HBoxContainer.new()
 	var add_btn := Button.new()

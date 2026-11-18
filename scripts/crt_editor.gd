@@ -31,6 +31,15 @@ func setup(project: WorldProject) -> void:
 		var l := Label.new()
 		l.text = "phi.crt は無い world です (汎用 Create のみ)"
 		left.add_child(l)
+		var cb := Button.new()
+		cb.text = "phi.crt を新規作成"
+		cb.pressed.connect(func() -> void:
+			if project.create_file("crt"):
+				for child in get_children():
+					remove_child(child)
+					child.queue_free()
+				setup(project))
+		left.add_child(cb)
 		return
 	var add_btn := Button.new()
 	add_btn.text = "レシピを追加 (末尾)"

@@ -2,7 +2,7 @@ class_name CreatorsVersion
 extends RefCounted
 ## バージョン情報 (About 表示用)。
 
-const VERSION := "0.4.4"
+const VERSION := "0.5.0"
 const AUTHOR := "Master NEO"
 const APP_NAME := "PHI CREATORS SUITE"
 

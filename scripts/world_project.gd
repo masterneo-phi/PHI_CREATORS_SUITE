@@ -68,6 +68,44 @@ func open(p_dir: String) -> bool:
 	return true
 
 
+## 無いファイルを空で新規作成する。その場でディスクにも書き出す。
+## kind は "swt" / "ed" / "od" / "crt" / "ex" / "ad"。
+func create_file(kind: String) -> bool:
+	var path := dir.path_join("phi." + kind)
+	if FileAccess.file_exists(path):
+		return false
+	var data := PackedByteArray()
+	match kind:
+		"swt":
+			swt = PhiSwt.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_swt = true
+			data = swt.serialize()
+		"ed":
+			ed = PhiEd.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_ed = true
+			data = ed.serialize()
+		"od":
+			od = PhiOd.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_od = true
+			data = od.serialize()
+		"crt":
+			crt = PhiCrt.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_crt = true
+			data = crt.serialize()
+		"ex":
+			ex = PhiEx.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_ex = true
+			data = ex.serialize()
+		"ad":
+			ad = PhiAd.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_ad = true
+			data = ad.serialize()
+		_:
+			return false
+	_write(path, data)
+	return FileAccess.file_exists(path)
+
+
 ## マップを新規作成する (正方形のみ)。dd/fd をメモリ上に作り、
 ## 保存時に書き出される。サーバは同じ寸法でコンパイルする必要がある。
 func create_map(size: int) -> void:

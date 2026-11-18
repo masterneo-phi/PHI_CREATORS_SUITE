@@ -23,6 +23,15 @@ func setup(project: WorldProject) -> void:
 		var l := Label.new()
 		l.text = "phi.ex は無い world です (制限なし)"
 		left.add_child(l)
+		var cb := Button.new()
+		cb.text = "phi.ex を新規作成"
+		cb.pressed.connect(func() -> void:
+			if project.create_file("ex"):
+				for child in get_children():
+					remove_child(child)
+					child.queue_free()
+				setup(project))
+		left.add_child(cb)
 		return
 	var btns := HBoxContainer.new()
 	for letter in ["G", "g", "I", "i", "M", "m"]:
