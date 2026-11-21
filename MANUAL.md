@@ -1,6 +1,6 @@
 # PHI CREATORS SUITE 利用マニュアル
 
-PHIDM 世界データ制作のための統合開発環境。対応バージョン: 0.5.1 ／ 作: Master NEO
+PHIDM 世界データ制作のための統合開発環境。対応バージョン: 0.5.2 ／ 作: Master NEO
 
 (PDF 版はリリースの `PHI_CREATORS_SUITE-Manual.pdf`、または配布 zip 同梱の
 「PHI_CREATORS_SUITEマニュアル.pdf」を見てください)
