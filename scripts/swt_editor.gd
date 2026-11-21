@@ -107,6 +107,9 @@ func _summary(i: int, rec: Dictionary) -> String:
 				int(f.get("ax", 0)), int(f.get("ay", 0)),
 				HelpTexts.dd_name(int(f.get("dd", 0)))]
 		"A":
+			if int(f.get("tail_kind", -1)) == 3:
+				return "演出 (FX) %04d → %04d" % [int(f.get("no", 0)),
+						int(f.get("next", 0))]
 			return "メッセージ %04d → %04d" % [int(f.get("no", 0)),
 					int(f.get("next", 0))]
 		"M":
@@ -514,6 +517,16 @@ func _show_a(rec: Dictionary, f: Dictionary) -> void:
 		_line_row("フラグ (flagno)", String(f.get("text", "")).substr(2),
 				func(t: String) -> void:
 			f["text"] = "f " + t
+			_commit(rec))
+	elif tail_kind == 3:
+		var hl3 := Label.new()
+		hl3.text = "末尾は演出 (FX) です。kind から始まるペイロードを書きます (text / dark / wipe / img / shake / glow)"
+		hl3.modulate = Color(0.75, 0.75, 0.75)
+		hl3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(hl3)
+		_line_row("演出ペイロード (z の後ろ)", String(f.get("text", "")).substr(2),
+				func(t: String) -> void:
+			f["text"] = "z " + t
 			_commit(rec))
 	else:
 		_line_row("末尾 (テキスト等)", String(f.get("text", "")),

@@ -33,6 +33,11 @@ const DD_PARAMS := {
 	23: ["tok"], 24: [], 25: ["rest"], 26: ["tok", "tok", "opt_tok"],
 	29: ["tok"], 30: [], 31: [], 33: ["q"], 44: ["qitem"],
 	45: ["tok"], 50: ["rest"], 90: ["qD"],
+	# PHIDM_NEO 独自拡張: 60=刻印記録 / 61=刻印表示 / 62=プログラム
+	# 実行、63〜68=演出 (FX)。いずれも引用符つき文字列 1 つ。
+	# 69 は演出系の予約番号 (サーバ未実装のため登録しない)。
+	60: ["q"], 61: ["q"], 62: ["q"],
+	63: ["q"], 64: ["q"], 65: ["q"], 66: ["q"], 67: ["q"], 68: ["q"],
 }
 ## DD16 は x の値で中間アトム数が変わるため専用処理する
 
@@ -248,6 +253,10 @@ static func _parse_a(line: String) -> Dictionary:
 		f["text"] = rest
 	elif rest.begins_with("f "):
 		f["tail_kind"] = 2
+		f["text"] = rest
+	elif rest.begins_with("z "):
+		# 演出 (FX) ペイロード (PHIDM_NEO 拡張、設計書 §10)
+		f["tail_kind"] = 3
 		f["text"] = rest
 	else:
 		f["tail_kind"] = -1

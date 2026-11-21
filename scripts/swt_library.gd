@@ -71,6 +71,8 @@ static func _sanitize_inner(s: String, role: String) -> String:
 			return "コマンド" if _has_non_ascii(s) else s
 		"expr":
 			return "式" if _has_non_ascii(s) else s
+		"fx":
+			return _mask_fx_text(s)
 	if s.length() <= 4:
 		return s
 	if not _has_non_ascii(s) and s.length() <= 16:
@@ -116,7 +118,35 @@ static func _act_role(dd: int) -> String:
 			return "command"
 		50:
 			return "expr"
+		63, 64, 65, 66, 67, 68:
+			return "fx"
 	return "any"
+
+
+## 演出 (FX) 引数の伏せ: 先頭の ASCII トークン (位置・数値・名前)
+## の形は残し、日本語の表示文字列が出てきた所から先を潰す
+static func _mask_fx_text(s: String) -> String:
+	if not _has_non_ascii(s):
+		return s
+	var kept: Array[String] = []
+	for tok in s.split(" ", false):
+		if _has_non_ascii(tok):
+			break
+		kept.append(tok)
+	kept.append("テキスト")
+	return " ".join(kept)
+
+
+## :A の演出ペイロード ("z " 込み) の伏せ
+static func _sanitize_fx_payload(text: String) -> String:
+	var body := text.substr(2) # "z " の後ろ
+	if not _has_non_ascii(body):
+		return text
+	var masked := _mask_fx_text(body)
+	# text 種別以外で形が残せない場合は丸ごと伏せる
+	if masked == "テキスト":
+		return ""
+	return "z " + masked
 
 
 ## レコードを伏せた形に作り替える。対象外は空辞書を返す
@@ -149,6 +179,8 @@ static func sanitize_record(rec: Dictionary) -> Dictionary:
 					f["text"] = _sanitize_atom(String(f["text"]), "message")
 				1:
 					f["text"] = "x 000 000"
+				3:
+					f["text"] = _sanitize_fx_payload(String(f["text"]))
 				-1:
 					if _has_non_ascii(String(f["text"])):
 						f["text"] = ""
