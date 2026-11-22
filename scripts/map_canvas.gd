@@ -28,9 +28,10 @@ var switch_points: Array = []
 var switch_targets: Array = []
 ## 選択中エリアの強調表示 (-1 = なし)
 var highlight_area := -1
-var mode := "terrain" ## terrain / fill / surface / area / object
+var mode := "terrain" ## terrain / fill / surface / area / object / height
 var pen_code := 0xFC
 var pen_roof := false
+var pen_height := 1 ## 高さペンの段数 (1/2/3/-1、0 = 消去)
 var pen_area := 0
 var cell_px := 16
 var offset := Vector2.ZERO ## 左上に表示するマス (小数可)
@@ -124,6 +125,9 @@ func _draw() -> void:
 				draw_rect(Rect2(rect.position + Vector2(1, 1),
 						rect.size - Vector2(2, 2)), Color(0.2, 0.9, 0.9),
 						false, 1.5)
+			var h := dd.height_at(cx, cy)
+			if h != 0:
+				_draw_height(rect, h, font)
 			if show_area and fd != null:
 				var ac := fd.code_at(cx, cy)
 				var col := Color.from_hsv(fmod(ac * 0.618, 1.0), 0.55, 0.9, 0.35)
@@ -237,6 +241,22 @@ func _draw_terrain(rect: Rect2, code: int, roof: bool, font: Font) -> void:
 				Color(1, 0.9, 0.3, 0.95))
 
 
+## 高さの表示 (地形モード・見た目モード共通)。丘は白を重ねて
+## 明るく、窪地は黒を重ねて暗くし、段数を小さい文字で示す。
+## NeoPHI の自動生成 (段ごとの色調変更) に寄せた近似表現。
+func _draw_height(rect: Rect2, h: int, font: Font) -> void:
+	if h > 0:
+		draw_rect(rect, Color(1, 1, 1, 0.13 * h))
+	else:
+		draw_rect(rect, Color(0, 0, 0, 0.30))
+	if cell_px >= 16:
+		var label := "+%d" % h if h > 0 else "-1"
+		var col := Color(1, 1, 0.85, 0.95) if h > 0 \
+				else Color(0.65, 0.9, 1, 0.95)
+		draw_string(font, rect.position + Vector2(2, 11), label,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if dd == null:
 		return
@@ -273,7 +293,7 @@ func _gui_input(event: InputEvent) -> void:
 				grab_focus()
 				_begin_stroke()
 				_apply(cell_at_pos(mb.position))
-				_painting = mode in ["terrain", "area", "surface"]
+				_painting = mode in ["terrain", "area", "surface", "height"]
 			else:
 				_painting = false
 				_drag_obj = -1
@@ -303,6 +323,8 @@ func _pick(c: Vector2i) -> void:
 		return
 	if mode == "area" and fd != null:
 		pen_area = fd.code_at(c.x, c.y)
+	elif mode == "height":
+		pen_height = dd.height_at(c.x, c.y)
 	else:
 		pen_code = dd.code_at(c.x, c.y)
 		pen_roof = dd.roof_at(c.x, c.y)
@@ -325,6 +347,9 @@ func _apply(c: Vector2i) -> void:
 				fd.set_cell(c.x, c.y, pen_area)
 		"surface":
 			_paint_surface(c)
+		"height":
+			_record_cell(c)
+			dd.set_height(c.x, c.y, pen_height)
 		"object":
 			var idx := _object_at(c)
 			selected_object = idx
@@ -395,7 +420,7 @@ func _move_drag_obj(c: Vector2i) -> void:
 
 func _record_cell(c: Vector2i) -> void:
 	_record("d:%d:%d" % [c.x, c.y], [dd.code_at(c.x, c.y),
-			dd.roof_at(c.x, c.y)])
+			dd.roof_at(c.x, c.y), dd.height_at(c.x, c.y)])
 
 
 func _record_area(c: Vector2i) -> void:
@@ -446,7 +471,8 @@ func _read_key(key: String) -> Variant:
 	match p[0]:
 		"d":
 			return [dd.code_at(int(p[1]), int(p[2])),
-					dd.roof_at(int(p[1]), int(p[2]))]
+					dd.roof_at(int(p[1]), int(p[2])),
+					dd.height_at(int(p[1]), int(p[2]))]
 		"f":
 			return fd.code_at(int(p[1]), int(p[2])) if fd != null else 0
 		"t":
@@ -462,7 +488,8 @@ func _apply_key(key: String, value: Variant) -> void:
 	match p[0]:
 		"d":
 			var v: Array = value
-			dd.set_cell(int(p[1]), int(p[2]), int(v[0]), bool(v[1]))
+			dd.set_cell_full(int(p[1]), int(p[2]), int(v[0]), bool(v[1]),
+					int(v[2]))
 		"f":
 			if fd != null:
 				fd.set_cell(int(p[1]), int(p[2]), int(value))

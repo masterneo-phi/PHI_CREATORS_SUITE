@@ -32,7 +32,11 @@ var _zoom_2x := false
 const ZOOM_SIZES: Array[int] = [8, 12, 16, 24, 32, 48]
 const TOOLS: Array = [
 	["terrain", "地形ペン"], ["fill", "塗りつぶし"], ["surface", "見た目(:T)"],
-	["area", "エリアペン"], ["object", "オブジェクト"],
+	["area", "エリアペン"], ["object", "オブジェクト"], ["height", "高さペン"],
+]
+## 高さペンの段数ボタン [段数, 表示] (0 = 消去)
+const HEIGHT_PENS: Array = [
+	[1, "+1"], [2, "+2"], [3, "+3"], [-1, "−1 (窪地)"], [0, "消去"],
 ]
 
 
@@ -104,6 +108,30 @@ func _build_editor_ui() -> void:
 	_roof_check.toggled.connect(func(on: bool) -> void:
 		_canvas.pen_roof = on)
 	left.add_child(_roof_check)
+	var hl := Label.new()
+	hl.text = "■ 高さ (起伏)"
+	hl.tooltip_text = HelpTexts.HEIGHT_NOTE
+	hl.clip_text = true
+	hl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	left.add_child(hl)
+	var hgrid := GridContainer.new()
+	hgrid.columns = 3
+	left.add_child(hgrid)
+	var hgroup := ButtonGroup.new()
+	for hp in HEIGHT_PENS:
+		var hb := Button.new()
+		hb.text = String(hp[1])
+		hb.tooltip_text = HelpTexts.HEIGHT_NOTE
+		hb.toggle_mode = true
+		hb.button_group = hgroup
+		var hv := int(hp[0])
+		hb.pressed.connect(func() -> void:
+			_canvas.pen_height = hv
+			_set_tool("height")
+			(_tool_buttons["height"] as Button).button_pressed = true)
+		hgrid.add_child(hb)
+		if hv == 1:
+			hb.button_pressed = true
 	_zoom_ob = OptionButton.new()
 	for z in ZOOM_SIZES:
 		_zoom_ob.add_item("%d px" % z)
@@ -554,6 +582,11 @@ func _refresh_status(x: int = -1, y: int = -1) -> void:
 			String(PhiDd.CODE_TO_NAME.get(code, ""))]
 	if dd.roof_at(x, y):
 		s += " 屋根"
+	var h := dd.height_at(x, y)
+	if h > 0:
+		s += " 高さ +%d段" % h
+	elif h < 0:
+		s += " 高さ −1段 (窪地)"
 	if _project.fd != null:
 		var ac := _project.fd.code_at(x, y)
 		s += "\nエリア %02x" % ac

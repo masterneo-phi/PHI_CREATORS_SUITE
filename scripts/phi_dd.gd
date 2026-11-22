@@ -1,8 +1,11 @@
 class_name PhiDd
 extends RefCounted
 ## phi.dd (マップ地形) のモデル。FORMAT_SPEC §2。
-## 1マス = 2文字 (地形文字 + 屋根 '~')。未編集マスは原文ペアを
+## 1マス = 2文字 (地形文字 + 見た目文字)。未編集マスは原文ペアを
 ## そのまま保持し、編集したマスだけサーバのライタ正規形で出す。
+## 見た目文字は通常は正規ペアの2文字目で、'~' は屋根、
+## '1'/'2'/'3' は高さ +1/+2/+3 段、'9' は −1 段 (窪地) の印
+## (PHIDM_NEO 拡張)。屋根と高さは1文字を取り合うため排他。
 ## 格子の後ろの :T 行 (surface) は PhiRawLines で原文保持する。
 
 var size_x := 0
@@ -10,6 +13,7 @@ var size_y := 0
 var _raw: PackedByteArray = PackedByteArray() ## 2バイト/マス
 var _codes: PackedByteArray = PackedByteArray()
 var _roof: PackedByteArray = PackedByteArray()
+var _height: PackedInt32Array = PackedInt32Array() ## −1〜+3 (段)
 var _edited := {}
 var force_dirty := false ## 新規作成直後は保存対象にする
 var tail: PhiRawLines
@@ -47,6 +51,10 @@ const PALETTE: Array[int] = [
 	0x7C, 0x6C, 0x79, 0xD0, 0xDD, 0xC0, 0xEC, 0xFC, 0xFD, 0x08,
 	0x40, 0x80, 0xC2,
 ]
+## 見た目文字 (バイト) → 高さ (段)。'~' (屋根) とは排他。
+const BYTE_TO_HEIGHT := {0x31: 1, 0x32: 2, 0x33: 3, 0x39: -1}
+## 高さ (段) → 見た目文字 (バイト)
+const HEIGHT_TO_BYTE := {1: 0x31, 2: 0x32, 3: 0x33, -1: 0x39}
 ## コード → クライアント表示文字 (dd_m57 の潰し)
 const CODE_TO_DISP := {
 	0x01: "o", 0x10: ":", 0x11: "+", 0x12: "_", 0xD1: "_",
@@ -64,6 +72,7 @@ static func create_new(sx: int, sy: int) -> PhiDd:
 	dd._raw.resize(sx * sy * 2)
 	dd._codes.resize(sx * sy)
 	dd._roof.resize(sx * sy)
+	dd._height.resize(sx * sy)
 	for y in sy:
 		for x in sx:
 			var border := x == 0 or y == 0 or x == sx - 1 or y == sy - 1
@@ -87,6 +96,7 @@ static func parse(data: PackedByteArray, sx: int, sy: int) -> PhiDd:
 	dd._raw.resize(sx * sy * 2)
 	dd._codes.resize(sx * sy)
 	dd._roof.resize(sx * sy)
+	dd._height.resize(sx * sy)
 	var all := PhiRawLines.from_bytes(data)
 	for y in sy:
 		var row := PackedByteArray()
@@ -106,6 +116,7 @@ static func parse(data: PackedByteArray, sx: int, sy: int) -> PhiDd:
 			dd._raw[i * 2 + 1] = c2
 			dd._codes[i] = int(CHAR_TO_CODE.get(c1, 0))
 			dd._roof[i] = 1 if c2 == 0x7E else 0
+			dd._height[i] = int(BYTE_TO_HEIGHT.get(c2, 0))
 	dd.tail = PhiRawLines.new()
 	for li in range(sy, all.line_count()):
 		dd.tail.lines.append(all.lines[li])
@@ -131,10 +142,36 @@ func roof_at(x: int, y: int) -> bool:
 	return _roof[y * size_x + x] == 1
 
 
+## 高さ (段、−1〜+3)。0 = 印なし。
+func height_at(x: int, y: int) -> int:
+	return _height[y * size_x + x]
+
+
+## 地形の変更。高さは保持するが、屋根を付ける場合は
+## 1文字を取り合うため高さが落ちる。
 func set_cell(x: int, y: int, code: int, roof: bool) -> void:
+	var h := height_at(x, y)
+	if roof:
+		h = 0
+	set_cell_full(x, y, code, roof, h)
+
+
+func set_cell_full(x: int, y: int, code: int, roof: bool, height: int) -> void:
 	var i := y * size_x + x
 	_codes[i] = code
-	_roof[i] = 1 if roof else 0
+	_height[i] = clampi(height, -1, 3)
+	# 高さと屋根は排他 (高さがある側が印を取る)
+	_roof[i] = 1 if roof and height == 0 else 0
+	_edited[i] = true
+
+
+## 高さだけの変更。1バイト目 (地形) は保たれる。
+## 高さを付けると屋根は外れる (印が優先)。0 で消去。
+func set_height(x: int, y: int, height: int) -> void:
+	var i := y * size_x + x
+	_height[i] = clampi(height, -1, 3)
+	if height != 0:
+		_roof[i] = 0
 	_edited[i] = true
 
 
@@ -159,7 +196,10 @@ func serialize() -> PackedByteArray:
 				var pair := String(CODE_TO_PAIR.get(_codes[i], "  "))
 				var b := pair.to_ascii_buffer()
 				out.append(b[0])
-				out.append(0x7E if _roof[i] == 1 else b[1])
+				if _height[i] != 0:
+					out.append(int(HEIGHT_TO_BYTE.get(_height[i], b[1])))
+				else:
+					out.append(0x7E if _roof[i] == 1 else b[1])
 			else:
 				out.append(_raw[i * 2])
 				out.append(_raw[i * 2 + 1])
