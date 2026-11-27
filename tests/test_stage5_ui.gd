@@ -31,7 +31,7 @@ func _run() -> void:
 	for e in MainScript.EDITORS:
 		scenes.append(String(e["scene"]))
 	_check(scenes == ["td", "announce", "map", "swt", "od", "ed", "crt",
-			"ex", "ad"], "editor order: " + str(scenes))
+			"ex", "ad", "jb", "pt", "cls"], "editor order: " + str(scenes))
 	# --- クリエイトのブロック化 (モデル) ---
 	var crt := PhiCrt.load_file(
 			"res://tests/fixtures/realworld/phi.crt")
