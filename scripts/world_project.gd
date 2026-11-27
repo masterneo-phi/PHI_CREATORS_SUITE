@@ -19,13 +19,21 @@ var has_od := false
 var has_crt := false
 var has_ex := false
 var has_ad := false
+var jb: PhiJb
+var pt: PhiPt
+var has_jb := false
+var has_pt := false
+var has_ddx := false
 var bb_text := ""
 var inf_text := ""
+var cls_text := ""
 var has_swt := false
 var has_bb := false
 var has_inf := false
+var has_cls := false
 var _bb_bytes := PackedByteArray()
 var _inf_bytes := PackedByteArray()
+var _cls_bytes := PackedByteArray()
 
 
 func open(p_dir: String) -> bool:
@@ -59,6 +67,17 @@ func open(p_dir: String) -> bool:
 	has_ad = FileAccess.file_exists(dir.path_join("phi.ad"))
 	if has_ad:
 		ad = PhiAd.load_file(dir.path_join("phi.ad"))
+	has_jb = FileAccess.file_exists(dir.path_join("phi.jb"))
+	if has_jb:
+		jb = PhiJb.load_file(dir.path_join("phi.jb"))
+	has_pt = FileAccess.file_exists(dir.path_join("phi.pt"))
+	if has_pt:
+		pt = PhiPt.load_file(dir.path_join("phi.pt"))
+	has_cls = FileAccess.file_exists(dir.path_join("phi.cls"))
+	if has_cls:
+		cls_text = _read_text(dir.path_join("phi.cls"))
+		_cls_bytes = _read_bytes(dir.path_join("phi.cls"))
+	has_ddx = FileAccess.file_exists(dir.path_join("phi.ddx"))
 	map_size = _read_map_size()
 	if map_size.x > 0:
 		if FileAccess.file_exists(dir.path_join("phi.dd")):
@@ -69,7 +88,8 @@ func open(p_dir: String) -> bool:
 
 
 ## 無いファイルを空で新規作成する。その場でディスクにも書き出す。
-## kind は "swt" / "ed" / "od" / "crt" / "ex" / "ad"。
+## kind は "swt" / "ed" / "od" / "crt" / "ex" / "ad" / "jb" / "pt"。
+## phi.jb は空でも存在するだけでジョブ／性別が有効になる。
 func create_file(kind: String) -> bool:
 	var path := dir.path_join("phi." + kind)
 	if FileAccess.file_exists(path):
@@ -100,6 +120,14 @@ func create_file(kind: String) -> bool:
 			ad = PhiAd.parse(PhiRawLines.from_bytes(PackedByteArray()))
 			has_ad = true
 			data = ad.serialize()
+		"jb":
+			jb = PhiJb.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_jb = true
+			data = jb.serialize()
+		"pt":
+			pt = PhiPt.parse(PhiRawLines.from_bytes(PackedByteArray()))
+			has_pt = true
+			data = pt.serialize()
 		_:
 			return false
 	_write(path, data)
@@ -209,12 +237,24 @@ func ad_dirty() -> bool:
 	return _model_dirty(ad)
 
 
+func jb_dirty() -> bool:
+	return _model_dirty(jb)
+
+
+func pt_dirty() -> bool:
+	return _model_dirty(pt)
+
+
 func bb_dirty() -> bool:
 	return Cp932.encode(bb_text) != _bb_bytes
 
 
 func inf_dirty() -> bool:
 	return Cp932.encode(inf_text) != _inf_bytes
+
+
+func cls_dirty() -> bool:
+	return Cp932.encode(cls_text) != _cls_bytes
 
 
 ## 変更のあるファイルを保存する (.bak を残す)。保存した名前を返す
@@ -248,6 +288,19 @@ func save_all() -> Array[String]:
 		_write(dir.path_join("phi.ad"), ad.serialize())
 		_clear_modified(ad)
 		saved.append("phi.ad")
+	if jb != null and jb_dirty():
+		_write(dir.path_join("phi.jb"), jb.serialize())
+		_clear_modified(jb)
+		saved.append("phi.jb")
+	if pt != null and pt_dirty():
+		_write(dir.path_join("phi.pt"), pt.serialize())
+		_clear_modified(pt)
+		saved.append("phi.pt")
+	if cls_dirty():
+		_write(dir.path_join("phi.cls"), Cp932.encode(cls_text))
+		_cls_bytes = Cp932.encode(cls_text)
+		has_cls = true
+		saved.append("phi.cls")
 	if dd != null and dd.is_dirty():
 		_write(dir.path_join("phi.dd"), dd.serialize())
 		dd._edited.clear()

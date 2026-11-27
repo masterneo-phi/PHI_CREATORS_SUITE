@@ -10,6 +10,9 @@ const OdEditor := preload("res://scripts/od_editor.gd")
 const ExEditor := preload("res://scripts/ex_editor.gd")
 const CrtEditor := preload("res://scripts/crt_editor.gd")
 const AdEditor := preload("res://scripts/ad_editor.gd")
+const JbEditor := preload("res://scripts/jb_editor.gd")
+const PtEditor := preload("res://scripts/pt_editor.gd")
+const ClsEditor := preload("res://scripts/cls_editor.gd")
 const MapEditor := preload("res://scripts/map_editor.gd")
 
 const EDITORS: Array[Dictionary] = [
@@ -22,6 +25,9 @@ const EDITORS: Array[Dictionary] = [
 	{"name": "クリエイト (phi.crt)", "scene": "crt"},
 	{"name": "ゲート制限 (phi.ex)", "scene": "ex"},
 	{"name": "マスター権限 (phi.ad)", "scene": "ad"},
+	{"name": "ジョブ・性別 (phi.jb)", "scene": "jb"},
+	{"name": "ペット (phi.pt)", "scene": "pt"},
+	{"name": "プログラム (phi.cls)", "scene": "cls"},
 ]
 
 var _project: WorldProject
@@ -262,6 +268,12 @@ func _on_editor_selected(idx: int) -> void:
 				ed = CrtEditor.new()
 			"ad":
 				ed = AdEditor.new()
+			"jb":
+				ed = JbEditor.new()
+			"pt":
+				ed = PtEditor.new()
+			"cls":
+				ed = ClsEditor.new()
 			"map":
 				ed = MapEditor.new()
 				ed.connect("coord_picked", _on_coord_picked)

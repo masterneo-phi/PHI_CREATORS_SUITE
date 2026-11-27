@@ -22,6 +22,11 @@ const CC_PARAMS := {
 	20: ["tok", "tok", "tok"], 21: ["qtok"], 22: [], 23: [], 24: [],
 	25: ["tok", "tok", "tok", "tok", "tok", "tok"],
 	30: ["tok"], 31: ["tok"],
+	# PHIDM_NEO 独自拡張: 80=職業・性別 / 91=実時間 (月・日・時・分、
+	# 各 99=任意) / 92=ペット (タイプ・状態)。条件25 の変動量形式は
+	# 専用リーダ (_read_cc25) で読むため、ここの 25 は従来形の宣言。
+	80: ["tok", "tok"], 91: ["tok", "tok", "tok", "tok"],
+	92: ["tok", "tok"],
 }
 const DD_PARAMS := {
 	1: ["tok"], 2: [], 3: ["qD"], 4: ["qitem"], 5: ["tok"],
@@ -31,8 +36,14 @@ const DD_PARAMS := {
 	18: ["tok", "tok", "tok", "opt_expr_tail"], 19: ["tok", "tok"],
 	20: ["tok", "tok", "qD"], 21: ["tok", "opt_tok"], 22: ["rest"],
 	23: ["tok"], 24: [], 25: ["rest"], 26: ["tok", "tok", "opt_tok"],
-	29: ["tok"], 30: [], 31: [], 33: ["q"], 44: ["qitem"],
+	29: ["tok"], 30: [], 31: [], 33: ["q"], 34: ["tok", "tok"],
+	44: ["qitem"],
 	45: ["tok"], 50: ["rest"], 90: ["qD"],
+	# PHIDM_NEO 独自拡張: 51/52=式・代入 (JET 由来、50 と同じ rest 形)、
+	# 80=職業・性別を設定、81/82=フラグを変更 (JET 由来、10 と同じ形)、
+	# 92=ペット (操作・タイプ)。
+	51: ["rest"], 52: ["rest"], 80: ["tok", "tok"],
+	81: ["tok", "qD"], 82: ["tok", "qD"], 92: ["tok", "tok"],
 	# PHIDM_NEO 独自拡張: 60=刻印記録 / 61=刻印表示 / 62=プログラム
 	# 実行、63〜68=演出 (FX)。いずれも引用符つき文字列 1 つ。
 	# 69 は演出系の予約番号 (サーバ未実装のため登録しない)。
@@ -155,6 +166,22 @@ static func _read_cc20(s: String, pos: int) -> Array:
 	return [atoms, s.substr(p).lstrip(" "), p]
 
 
+## 条件25 は 6 アトム (レベル種類・式・値・状態種別・式・境界値) が
+## 基本形で、状態種別 (4 つ目) が 2/3 の時だけ 7 つ目に変動量下限
+## (4桁) が続く (PHIDM_NEO v2.2)。サーバのローダと同じ分岐で読む。
+static func _read_cc25(s: String, pos: int) -> Array:
+	var got := _read_atoms(s, pos,
+			["tok", "tok", "tok", "tok", "tok", "tok"])
+	var atoms: Array = got[0]
+	var p := int(got[2])
+	if atoms.size() >= 4 and String(atoms[3]).to_int() >= 2:
+		var a := _read_atom(s, p)
+		if String(a[0]) != "":
+			atoms.append(String(a[0]))
+			p = int(a[1])
+	return [atoms, s.substr(p), p]
+
+
 static func _parse_line(line: String) -> Dictionary:
 	if line.begins_with(":S "):
 		return _parse_s(line)
@@ -180,6 +207,8 @@ static func _parse_s(line: String) -> Dictionary:
 	var got: Array
 	if cc == 20:
 		got = _read_cc20(line, p)
+	elif cc == 25:
+		got = _read_cc25(line, p)
 	else:
 		var specs: Array = CC_PARAMS.get(cc, [])
 		got = _read_atoms(line, p, specs)
@@ -257,6 +286,16 @@ static func _parse_a(line: String) -> Dictionary:
 	elif rest.begins_with("z "):
 		# 演出 (FX) ペイロード (PHIDM_NEO 拡張、設計書 §10)
 		f["tail_kind"] = 3
+		f["text"] = rest
+	elif rest == "y" or rest.begins_with("y "):
+		# Yes/No 選択 (PHIDM_NEO 拡張、MRDM 由来)。分岐先はパラメータ
+		# ではなく next=はい / wait=いいえ の欄が担う
+		f["tail_kind"] = 4
+		f["text"] = rest
+	elif rest == "s" or rest.begins_with("s "):
+		# 選択肢 (PHIDM_NEO 拡張、MRDM 由来)。next=次の選択肢行、
+		# wait=選択時の分岐先
+		f["tail_kind"] = 5
 		f["text"] = rest
 	else:
 		f["tail_kind"] = -1

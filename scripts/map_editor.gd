@@ -277,6 +277,15 @@ func _build_editor_ui() -> void:
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(_status)
+	if _project.has_ddx:
+		var ddx_note := Label.new()
+		ddx_note.text = "注意: この world には phi.ddx (マップ上書き) があります。" \
+				+ "実機では起動時に X フラグのエリアへ上書きされるため、" \
+				+ "表示 (素の phi.dd) と見た目が食い違う場所があります。" \
+				+ "phi.ddx 自体は PCS では編集できません。"
+		ddx_note.modulate = Color(1.0, 0.85, 0.6)
+		ddx_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		right.add_child(ddx_note)
 	_cell_label = Label.new()
 	_cell_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(_cell_label)

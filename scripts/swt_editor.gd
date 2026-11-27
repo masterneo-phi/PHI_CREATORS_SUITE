@@ -107,9 +107,16 @@ func _summary(i: int, rec: Dictionary) -> String:
 				int(f.get("ax", 0)), int(f.get("ay", 0)),
 				HelpTexts.dd_name(int(f.get("dd", 0)))]
 		"A":
-			if int(f.get("tail_kind", -1)) == 3:
-				return "演出 (FX) %04d → %04d" % [int(f.get("no", 0)),
-						int(f.get("next", 0))]
+			match int(f.get("tail_kind", -1)):
+				3:
+					return "演出 (FX) %04d → %04d" % [int(f.get("no", 0)),
+							int(f.get("next", 0))]
+				4:
+					return "選択 (Yes/No) %04d はい→%04d" % [
+							int(f.get("no", 0)), int(f.get("next", 0))]
+				5:
+					return "選択肢 %04d → 次 %04d" % [int(f.get("no", 0)),
+							int(f.get("next", 0))]
 			return "メッセージ %04d → %04d" % [int(f.get("no", 0)),
 					int(f.get("next", 0))]
 		"M":
@@ -463,6 +470,22 @@ func _show_s(rec: Dictionary, f: Dictionary) -> void:
 		f["act"] = _read_atoms(act_box)
 		_commit(rec))
 	_detail.add_child(apply_act)
+	# PHIDM_NEO 拡張の条件・動作には前提と引数の意味を注記する
+	var notes: Array[String] = []
+	if int(f["cc"]) == 80 or int(f["dd"]) == 80:
+		notes.append(HelpTexts.JOB_NOTE)
+	if int(f["cc"]) == 92 or int(f["dd"]) == 92:
+		notes.append(HelpTexts.PET_NOTE)
+	if int(f["cc"]) == 91:
+		notes.append(HelpTexts.TIME_NOTE)
+	if int(f["cc"]) == 25:
+		notes.append(HelpTexts.CC25_NOTE)
+	for nt in notes:
+		var nl := Label.new()
+		nl.text = nt
+		nl.modulate = Color(0.75, 0.75, 0.75)
+		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(nl)
 	if f.has("tail_raw"):
 		_line_row("末尾 (原文の残り)", String(f["tail_raw"]),
 				func(t: String) -> void:
@@ -527,6 +550,32 @@ func _show_a(rec: Dictionary, f: Dictionary) -> void:
 		_line_row("演出ペイロード (z の後ろ)", String(f.get("text", "")).substr(2),
 				func(t: String) -> void:
 			f["text"] = "z " + t
+			_commit(rec))
+	elif tail_kind == 4:
+		var hl4 := Label.new()
+		hl4.text = "末尾は Yes/No 選択 (y) です (PHIDM_NEO 拡張)。" \
+				+ "質問文を表示して [ 1] はい / [ 2] いいえ の選択を待ちます。" \
+				+ "分岐先はパラメータではなく、上の「次の番号」欄が「はい」、" \
+				+ "「待ち」欄が「いいえ」の分岐先です。"
+		hl4.modulate = Color(0.75, 0.75, 0.75)
+		hl4.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(hl4)
+		_line_row("質問文 (y の後ろ、\"...\" 形)", String(f.get("text", "")).substr(2),
+				func(t: String) -> void:
+			f["text"] = "y " + t
+			_commit(rec))
+	elif tail_kind == 5:
+		var hl5 := Label.new()
+		hl5.text = "末尾は選択肢 (s) です (PHIDM_NEO 拡張)。この行が選択肢の1つで、" \
+				+ "最大8個まで並べられます。「次の番号」欄が次の選択肢行の番号 " \
+				+ "(最後の行は 0)、「待ち」欄がこの選択肢を選んだ時の分岐先です。" \
+				+ "数字以外の発言では選択肢が再表示されます。"
+		hl5.modulate = Color(0.75, 0.75, 0.75)
+		hl5.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_detail.add_child(hl5)
+		_line_row("選択肢の文 (s の後ろ、\"...\" 形)", String(f.get("text", "")).substr(2),
+				func(t: String) -> void:
+			f["text"] = "s " + t
 			_commit(rec))
 	else:
 		_line_row("末尾 (テキスト等)", String(f.get("text", "")),
